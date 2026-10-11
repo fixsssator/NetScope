@@ -126,6 +126,7 @@ public class MainActivity extends Activity {
             check.setText(label + "\n" + info.packageName);
             check.setTextSize(14);
             check.setTag(info.packageName);
+            if (selectedPackageNames.contains(info.packageName)) check.setChecked(true);
             list.addView(check, matchParams());
             appChecks.add(check);
         }
@@ -445,9 +446,12 @@ public class MainActivity extends Activity {
         TextView countView = text(count + (count == 1 ? " DNS query captured" : " DNS queries captured"), 13);
         countView.setTextColor(0xFF65708A);
         status.addView(countView, matchParams());
+        Button refresh = button("Refresh capture status");
+        refresh.setOnClickListener(v -> showAppPicker());
+        status.addView(refresh, marginParams(0, 10, 0, 0));
         Button view = button("Open domain history");
         view.setOnClickListener(v -> showDomainPicker());
-        status.addView(view, marginParams(0, 10, 0, 0));
+        status.addView(view, marginParams(0, 6, 0, 0));
         root.addView(status, marginParams(0, 0, 0, 16));
     }
 
