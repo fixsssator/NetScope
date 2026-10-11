@@ -40,15 +40,6 @@ public class MainActivity extends Activity {
     private ArrayList<String> selectedPackageNames = new ArrayList<>();
     private static final int VPN_PERMISSION_REQUEST = 700;
 
-    private static final String[] SAMPLE_DOMAINS = {
-            "api.example.com",
-            "cdn.example.net",
-            "auth.example.org",
-            "telemetry.example.com",
-            "static.example.net",
-            "203.0.113.10"
-    };
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -172,7 +163,7 @@ public class MainActivity extends Activity {
 
     private void showDomainPicker() {
         setupRoot();
-        title("Select domains");
+        title("Observed DNS history");
         subtitle(selectedAppLabel + " · Locally stored DNS observations");
         TextView warning = text(
                 "Only DNS query names observed by the local VPN are listed here. This is not a list of all connections.",
