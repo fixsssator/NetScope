@@ -4,6 +4,12 @@ NetScope is an Android networking utility project built in Java for the CS50 fin
 
 The goal is to help users choose which installed apps they want to inspect, review observed domains and IP addresses, select individual entries, and copy only the selected values.
 
+## Versioning
+
+The current app version is **0.2.0** (`versionCode` 2). The version is defined in `gradle.properties` as `appVersionName` and `appVersionCode`; `app/build.gradle` reads those values. Follow semantic versioning for `appVersionName` and always increase `appVersionCode` for a new Android build. Pushing a tag such as `v0.2.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Current status
 
 This repository contains the initial Android app scaffold:
@@ -30,7 +36,7 @@ From the repository root:
 gradle assembleDebug
 ```
 
-The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`.
+The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`. CI also uploads a version-named APK artifact. Pushing a `v*` tag creates a GitHub Release with the APK attached.
 
 You can also run the **Android CI** workflow from the Actions tab. Successful builds upload the debug APK as a workflow artifact.
 
