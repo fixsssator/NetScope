@@ -51,12 +51,14 @@ public class MainActivity extends Activity {
     private EditText domainSearchView;
     private android.os.Handler liveHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable liveRefresh;
+    private String lastRenderedHistory;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         java.util.Set<String> saved = getSharedPreferences("netscope_settings", MODE_PRIVATE).getStringSet("selected_packages", Collections.<String>emptySet());
         selectedPackageNames = new ArrayList<>(saved);
+        selectedAppLabel = selectedPackageNames.isEmpty() ? "No app selected" : selectedPackageNames.size() + " selected app(s)";
         if (getIntent().getBooleanExtra("open_dns_history", false)) showDomainPicker();
         else showAppPicker();
     }
@@ -226,7 +228,7 @@ public class MainActivity extends Activity {
             if (selectedPackageNames.contains(info.packageName)) check.setChecked(true);
             check.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 saveSelectedPackagesFromChecks();
-                if (isChecked) {
+                {
                     list.removeView(appRow);
                     int selectedRows = 0;
                     for (int i = 0; i < list.getChildCount(); i++) {
@@ -258,6 +260,12 @@ public class MainActivity extends Activity {
             }
             @Override public void afterTextChanged(android.text.Editable s) {}
         });
+        String initialAppQuery = search.getText().toString().toLowerCase(Locale.ROOT).trim();
+        for (CheckBox check : appChecks) {
+            if (check.getParent() instanceof View) {
+                ((View) check.getParent()).setVisibility(check.getText().toString().toLowerCase(Locale.ROOT).contains(initialAppQuery) ? View.VISIBLE : View.GONE);
+            }
+        }
 
         all.setOnClickListener(v -> {
             for (CheckBox check : appChecks) {
@@ -292,8 +300,8 @@ public class MainActivity extends Activity {
     private void showDomainPicker() {
         currentScreen = "history";
         setupRoot();
-        title("Observed DNS history");
-        subtitle(selectedAppLabel + " · Locally stored DNS observations");
+        title("Live DNS domains");
+        subtitle(selectedAppLabel + " · Domains and IP addresses update automatically while capture is running");
         TextView warning = text("Recently observed DNS lookups. Tap a domain to inspect the IP addresses returned by DNS.", 13);
         warning.setTextColor(colorMuted());
         root.addView(warning, marginParams(0, 4, 0, 12));
@@ -514,10 +522,13 @@ public class MainActivity extends Activity {
         liveRefresh = new Runnable() {
             @Override public void run() {
                 if (!"history".equals(currentScreen) || domainListView == null) return;
-                int scrollY = findScrollView().getScrollY();
-                String filter = domainSearchView == null ? "" : domainSearchView.getText().toString();
-                renderDomainList(domainListView, filter);
-                findScrollView().post(() -> findScrollView().scrollTo(0, scrollY));
+                String history = getSharedPreferences("netscope_capture", MODE_PRIVATE).getString("dns_history", "[]");
+                if (!history.equals(lastRenderedHistory)) {
+                    int scrollY = findScrollView().getScrollY();
+                    String filter = domainSearchView == null ? "" : domainSearchView.getText().toString();
+                    renderDomainList(domainListView, filter);
+                    findScrollView().post(() -> findScrollView().scrollTo(0, scrollY));
+                }
                 liveHandler.postDelayed(this, 1200);
             }
         };
@@ -537,6 +548,7 @@ public class MainActivity extends Activity {
 
     private void renderDomainList(LinearLayout list, String filterText) {
         if (list == null) return;
+        lastRenderedHistory = getSharedPreferences("netscope_capture", MODE_PRIVATE).getString("dns_history", "[]");
         list.removeAllViews();
         domainChecks.clear();
         String query = filterText == null ? "" : filterText.toLowerCase(Locale.ROOT).trim();
