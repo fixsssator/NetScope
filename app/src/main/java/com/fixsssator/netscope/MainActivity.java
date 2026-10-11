@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.TrafficStats;
 import android.net.VpnService;
 import android.os.Build;
@@ -43,14 +45,17 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        showAppPicker();
+        if (getIntent().getBooleanExtra("open_dns_history", false)) showDomainPicker();
+        else showAppPicker();
     }
 
     private void setupRoot() {
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(20), dp(20), dp(24));
+        root.setPadding(dp(18), dp(18), dp(18), dp(28));
+        root.setBackgroundColor(0xFFF3F5FA);
+        scroll.setFillViewport(true);
         scroll.addView(root);
         setContentView(scroll);
     }
@@ -58,15 +63,18 @@ public class MainActivity extends Activity {
     private void showAppPicker() {
         setupRoot();
         title("NetScope");
-        TextView version = text("Version " + BuildConfig.VERSION_NAME, 12);
-        version.setTextColor(0xFF777777);
-        root.addView(version, marginParams(0, 0, 0, 4));
-        subtitle("Choose which apps you want to inspect.");
+        TextView version = text("NETWORK INSPECTOR  ·  v" + BuildConfig.VERSION_NAME, 11);
+        version.setTextColor(0xFF65708A);
+        version.setLetterSpacing(0.08f);
+        root.addView(version, marginParams(0, 0, 0, 12));
+        subtitle("Your network activity, without the clutter.");
+        addCaptureStatusCard();
+        subtitle("Choose apps to observe.");
         Button trafficStats = button("View per-app traffic stats");
         trafficStats.setOnClickListener(v -> showTrafficStats());
         root.addView(trafficStats, marginParams(0, 0, 0, 12));
-        TextView note = text("DNS observation uses a local VPN and forwards IPv4 UDP DNS queries to Cloudflare (1.1.1.1).", 14);
-        note.setTextColor(0xFFB45309);
+        TextView note = text("DNS requests are forwarded to Cloudflare DNS (1.1.1.1). Only domain names and returned IP addresses are recorded.", 13);
+        note.setTextColor(0xFF65708A);
         root.addView(note, marginParams(0, 4, 0, 12));
 
         EditText search = new EditText(this);
@@ -165,10 +173,8 @@ public class MainActivity extends Activity {
         setupRoot();
         title("Observed DNS history");
         subtitle(selectedAppLabel + " · Locally stored DNS observations");
-        TextView warning = text(
-                "Only DNS query names observed by the local VPN are listed here. This is not a list of all connections.",
-                14);
-        warning.setTextColor(0xFFB45309);
+        TextView warning = text("Recently observed DNS lookups. Tap a domain to inspect the IP addresses returned by DNS.", 13);
+        warning.setTextColor(0xFF65708A);
         root.addView(warning, marginParams(0, 4, 0, 12));
 
         EditText search = new EditText(this);
