@@ -49,6 +49,13 @@ public class MainActivity extends Activity {
         else showAppPicker();
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent.getBooleanExtra("open_dns_history", false)) showDomainPicker();
+    }
+
     private void setupRoot() {
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
@@ -235,8 +242,9 @@ public class MainActivity extends Activity {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 String query = s.toString().toLowerCase(Locale.ROOT).trim();
                 for (CheckBox check : domainChecks) {
-                    check.setVisibility(String.valueOf(check.getTag()).toLowerCase(Locale.ROOT)
-                            .contains(query) ? View.VISIBLE : View.GONE);
+                    boolean visible = String.valueOf(check.getTag()).toLowerCase(Locale.ROOT).contains(query);
+                    check.setVisibility(View.VISIBLE);
+                    if (check.getParent() instanceof View) ((View) check.getParent()).setVisibility(visible ? View.VISIBLE : View.GONE);
                 }
             }
             @Override public void afterTextChanged(android.text.Editable s) {}
@@ -283,6 +291,11 @@ public class MainActivity extends Activity {
 
 
     private void requestDnsStart() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 701);
+            return;
+        }
         selectedPackageNames.clear();
         for (CheckBox check : appChecks) {
             if (check.isChecked()) selectedPackageNames.add(String.valueOf(check.getTag()));
@@ -296,6 +309,25 @@ public class MainActivity extends Activity {
             startActivityForResult(permission, VPN_PERMISSION_REQUEST);
         } else {
             launchDnsService();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 701) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                requestDnsStart();
+            } else {
+                Toast.makeText(this, "Capture can run, but Android may hide its notification. Allow notifications for a visible status.", Toast.LENGTH_LONG).show();
+                selectedPackageNames.clear();
+                for (CheckBox check : appChecks) if (check.isChecked()) selectedPackageNames.add(String.valueOf(check.getTag()));
+                if (!selectedPackageNames.isEmpty()) {
+                    Intent permission = VpnService.prepare(this);
+                    if (permission != null) startActivityForResult(permission, VPN_PERMISSION_REQUEST);
+                    else launchDnsService();
+                }
+            }
         }
     }
 
