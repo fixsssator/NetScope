@@ -97,6 +97,8 @@ public class MainActivity extends Activity {
         liveControls = new LinearLayout(this);
         liveControls.setOrientation(LinearLayout.VERTICAL);
         liveControls.setPadding(dp(12), dp(8), dp(12), dp(8));
+        // Add breathing room below the status bar before the global controls.
+        outer.addView(new View(this), new LinearLayout.LayoutParams(-1, dp(28)));
         liveControls.setBackgroundColor(colorCard());
         TextView liveStatus = text(getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false) ? "● DNS observation is running" : "○ DNS observation is stopped", 13);
         liveStatus.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -317,10 +319,26 @@ public class MainActivity extends Activity {
 
         LinearLayout actions = row();
         Button all = button("Select all");
-        Button none = button("Clear");
+        Button none = button("Clear selection");
         actions.addView(all, weightParams());
         actions.addView(none, weightParams());
-        root.addView(actions, marginParams(0, 8, 0, 8));
+        root.addView(actions, marginParams(0, 8, 0, 4));
+
+        Button clearHistory = button("Clear all domain history");
+        clearHistory.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
+                .setTitle("Clear all domain history?")
+                .setMessage("This deletes every saved DNS domain and IP record from this device. It does not stop observation.")
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                .setPositiveButton("Clear history", (dialog, which) -> {
+                    getSharedPreferences("netscope_capture", MODE_PRIVATE).edit()
+                            .putString("dns_history", "[]")
+                            .putInt("capture_count", 0)
+                            .apply();
+                    lastRenderedHistory = "[]";
+                    renderDomainList(domainListView, domainSearchView == null ? "" : domainSearchView.getText().toString());
+                    Toast.makeText(this, "All DNS history cleared.", Toast.LENGTH_SHORT).show();
+                }).show());
+        root.addView(clearHistory, marginParams(0, 0, 0, 10));
 
         LinearLayout list = new LinearLayout(this);
         domainListView = list;
@@ -591,7 +609,7 @@ public class MainActivity extends Activity {
                     ? "Waiting for DNS queries…" : "No matching DNS domains", 17);
             message.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             empty.addView(message, matchParams());
-            TextView hint = text("Newly observed domains and IP addresses appear here automatically while DNS observation is running.", 13);
+            TextView hint = text("If this stays empty, Android Private DNS or an app's built-in encrypted DNS may bypass local DNS observation. Test with Private DNS set to Automatic or Off.", 13);
             hint.setTextColor(colorMuted());
             empty.addView(hint, marginParams(0, 6, 0, 0));
             list.addView(empty, marginParams(0, 8, 0, 8));
