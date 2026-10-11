@@ -58,6 +58,9 @@ public class MainActivity extends Activity {
     private void showAppPicker() {
         setupRoot();
         title("NetScope");
+        TextView version = text("Version " + BuildConfig.VERSION_NAME, 12);
+        version.setTextColor(0xFF777777);
+        root.addView(version, marginParams(0, 0, 0, 4));
         subtitle("Choose which apps you want to inspect.");
         Button trafficStats = button("View per-app traffic stats");
         trafficStats.setOnClickListener(v -> showTrafficStats());
