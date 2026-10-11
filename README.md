@@ -4,7 +4,7 @@ NetScope is an Android networking utility project built in Java for the CS50 fin
 
 ## Versioning
 
-Current development version: **0.3.0** (`versionCode` 3). Versions are defined in `gradle.properties` as `appVersionName` and `appVersionCode`. Follow semantic versioning for the name and always increase the code for a new Android build. Pushing a tag such as `v0.3.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
+Current development version: **0.4.0** (`versionCode` 4). Versions are defined in `gradle.properties` as `appVersionName` and `appVersionCode`. Follow semantic versioning for the name and always increase the code for a new Android build. Pushing a tag such as `v0.3.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
 
 See [CHANGELOG.md](CHANGELOG.md).
 
