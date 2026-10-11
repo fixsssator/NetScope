@@ -497,7 +497,11 @@ public class MainActivity extends Activity {
         intent.setAction(DnsCaptureService.ACTION_STOP);
         startService(intent);
         Toast.makeText(this, "DNS observation stop requested.", Toast.LENGTH_SHORT).show();
-        new android.os.Handler(getMainLooper()).postDelayed(this::showAppPicker, 700);
+        String screenBeforeStop = currentScreen;
+        new android.os.Handler(getMainLooper()).postDelayed(() -> {
+            if ("history".equals(screenBeforeStop)) showDomainPicker();
+            else showAppPicker();
+        }, 700);
     }
 
     private ArrayList<String> getSavedSelectedPackages() {
@@ -514,6 +518,7 @@ public class MainActivity extends Activity {
         ArrayList<String> selected = new ArrayList<>();
         for (CheckBox check : appChecks) if (check.isChecked()) selected.add(String.valueOf(check.getTag()));
         selectedPackageNames = selected;
+        selectedAppLabel = selected.isEmpty() ? "No app selected" : selected.size() + " selected app(s)";
         saveSelectedPackages(selected);
     }
 
