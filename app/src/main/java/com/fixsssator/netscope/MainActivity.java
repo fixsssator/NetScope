@@ -403,6 +403,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
         else startService(intent);
         Toast.makeText(this, "DNS observation requested. Check the persistent notification.", Toast.LENGTH_LONG).show();
+        new android.os.Handler(getMainLooper()).postDelayed(this::showAppPicker, 700);
     }
 
     private void stopDnsCapture() {
@@ -410,6 +411,7 @@ public class MainActivity extends Activity {
         intent.setAction(DnsCaptureService.ACTION_STOP);
         startService(intent);
         Toast.makeText(this, "DNS observation stop requested.", Toast.LENGTH_SHORT).show();
+        new android.os.Handler(getMainLooper()).postDelayed(this::showAppPicker, 700);
     }
 
     private LinkedHashMap<String, JSONObject> loadObservedDomains() {
@@ -509,7 +511,6 @@ public class MainActivity extends Activity {
         toggleCapture.setOnClickListener(v -> {
             if (getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false)) {
                 stopDnsCapture();
-                showAppPicker();
             } else {
                 requestDnsStart();
             }
