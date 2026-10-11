@@ -20,6 +20,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -41,6 +42,8 @@ public class MainActivity extends Activity {
     private String selectedAppLabel = "No app selected";
     private ArrayList<String> selectedPackageNames = new ArrayList<>();
     private static final int VPN_PERMISSION_REQUEST = 700;
+    private boolean darkMode;
+    private boolean includeSystemApps;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,11 +60,19 @@ public class MainActivity extends Activity {
     }
 
     private void setupRoot() {
+        darkMode = getSharedPreferences("netscope_settings", MODE_PRIVATE).getBoolean("dark_mode", true);
+        includeSystemApps = getSharedPreferences("netscope_settings", MODE_PRIVATE).getBoolean("include_system_apps", false);
+        if (Build.VERSION.SDK_INT >= 21) {
+            getWindow().setStatusBarColor(colorBackground());
+            getWindow().setNavigationBarColor(colorBackground());
+            getWindow().getDecorView().setSystemUiVisibility(darkMode ? 0 :
+                    (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR));
+        }
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(18), dp(18), dp(18), dp(28));
-        root.setBackgroundColor(0xFFF3F5FA);
+        root.setBackgroundColor(colorBackground());
         scroll.setFillViewport(true);
         scroll.addView(root);
         setContentView(scroll);
@@ -71,23 +82,39 @@ public class MainActivity extends Activity {
         setupRoot();
         title("NetScope");
         TextView version = text("NETWORK INSPECTOR  ·  v" + BuildConfig.VERSION_NAME, 11);
-        version.setTextColor(0xFF65708A);
+        version.setTextColor(colorMuted());
         version.setLetterSpacing(0.08f);
         root.addView(version, marginParams(0, 0, 0, 12));
         subtitle("Your network activity, without the clutter.");
+        Button themeToggle = button(darkMode ? "☀  Switch to light theme" : "☾  Switch to dark theme");
+        themeToggle.setOnClickListener(v -> {
+            getSharedPreferences("netscope_settings", MODE_PRIVATE).edit().putBoolean("dark_mode", !darkMode).apply();
+            showAppPicker();
+        });
+        root.addView(themeToggle, marginParams(0, 0, 0, 14));
         addCaptureStatusCard();
         subtitle("Choose apps to observe.");
         Button trafficStats = button("View per-app traffic stats");
         trafficStats.setOnClickListener(v -> showTrafficStats());
         root.addView(trafficStats, marginParams(0, 0, 0, 12));
         TextView note = text("DNS requests are forwarded to Cloudflare DNS (1.1.1.1). Only domain names and returned IP addresses are recorded.", 13);
-        note.setTextColor(0xFF65708A);
+        note.setTextColor(colorMuted());
         root.addView(note, marginParams(0, 4, 0, 12));
 
         EditText search = new EditText(this);
         search.setSingleLine(true);
+        search.setTextColor(colorText());
+        search.setHintTextColor(colorMuted());
         search.setHint("Search installed apps");
         root.addView(search, matchParams());
+
+        Button systemToggle = button(includeSystemApps ? "Hide system apps" : "Show system apps");
+        systemToggle.setOnClickListener(v -> {
+            getSharedPreferences("netscope_settings", MODE_PRIVATE).edit()
+                    .putBoolean("include_system_apps", !includeSystemApps).apply();
+            showAppPicker();
+        });
+        root.addView(systemToggle, marginParams(0, 8, 0, 4));
 
         LinearLayout actions = row();
         Button all = button("Select all");
@@ -116,18 +143,36 @@ public class MainActivity extends Activity {
         });
 
         for (ApplicationInfo info : apps) {
+            boolean isSystem = (info.flags & ApplicationInfo.FLAG_SYSTEM) != 0
+                    || (info.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0;
+            if (isSystem && !includeSystemApps) continue;
             String label;
             try {
                 label = pm.getApplicationLabel(info).toString();
             } catch (RuntimeException e) {
                 label = info.packageName;
             }
+            LinearLayout appRow = row();
+            appRow.setPadding(dp(8), dp(7), dp(8), dp(7));
+            appRow.setBackground(cardBackground());
+            ImageView icon = new ImageView(this);
+            try {
+                icon.setImageDrawable(pm.getApplicationIcon(info));
+            } catch (RuntimeException ignored) {
+                icon.setImageResource(android.R.drawable.sym_def_app_icon);
+            }
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(42), dp(42));
+            iconParams.setMargins(0, 0, dp(10), 0);
+            appRow.addView(icon, iconParams);
+
             CheckBox check = new CheckBox(this);
-            check.setText(label + "\n" + info.packageName);
-            check.setTextSize(14);
+            check.setText(label + "\n" + info.packageName + (isSystem ? "\nSYSTEM APP" : ""));
+            check.setTextSize(13);
+            check.setTextColor(colorText());
             check.setTag(info.packageName);
             if (selectedPackageNames.contains(info.packageName)) check.setChecked(true);
-            list.addView(check, matchParams());
+            appRow.addView(check, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            list.addView(appRow, marginParams(0, 0, 0, 6));
             appChecks.add(check);
         }
 
@@ -136,8 +181,8 @@ public class MainActivity extends Activity {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 String query = s.toString().toLowerCase(Locale.ROOT).trim();
                 for (CheckBox check : appChecks) {
-                    check.setVisibility(check.getText().toString().toLowerCase(Locale.ROOT)
-                            .contains(query) ? View.VISIBLE : View.GONE);
+                    boolean visible = check.getText().toString().toLowerCase(Locale.ROOT).contains(query);
+                    if (check.getParent() instanceof View) ((View) check.getParent()).setVisibility(visible ? View.VISIBLE : View.GONE);
                 }
             }
             @Override public void afterTextChanged(android.text.Editable s) {}
@@ -159,6 +204,7 @@ public class MainActivity extends Activity {
             for (CheckBox check : appChecks) {
                 if (check.isChecked()) selected.add(String.valueOf(check.getTag()));
             }
+            selectedPackageNames = new ArrayList<>(selected);
             selectedAppLabel = selected.isEmpty()
                     ? "No app selected" : selected.size() + " selected app(s)";
             showDomainPicker();
@@ -183,11 +229,13 @@ public class MainActivity extends Activity {
         title("Observed DNS history");
         subtitle(selectedAppLabel + " · Locally stored DNS observations");
         TextView warning = text("Recently observed DNS lookups. Tap a domain to inspect the IP addresses returned by DNS.", 13);
-        warning.setTextColor(0xFF65708A);
+        warning.setTextColor(colorMuted());
         root.addView(warning, marginParams(0, 4, 0, 12));
 
         EditText search = new EditText(this);
         search.setSingleLine(true);
+        search.setTextColor(colorText());
+        search.setHintTextColor(colorMuted());
         search.setHint("Filter domains or IP addresses");
         root.addView(search, matchParams());
 
@@ -210,7 +258,7 @@ public class MainActivity extends Activity {
             message.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             empty.addView(message, matchParams());
             TextView hint = text("Start a session from the home screen. New DNS lookups will appear here.", 13);
-            hint.setTextColor(0xFF65708A);
+            hint.setTextColor(colorMuted());
             empty.addView(hint, marginParams(0, 6, 0, 0));
             list.addView(empty, marginParams(0, 8, 0, 8));
         } else {
@@ -227,11 +275,11 @@ public class MainActivity extends Activity {
                 String ipText = formatIps(event.optJSONArray("ips"));
                 TextView metadata = text((ipText.isEmpty() ? "No IP address in response" : ipText)
                         + "\\nLast seen  " + event.optString("timestamp", "Unknown"), 12);
-                metadata.setTextColor(0xFF65708A);
+                metadata.setTextColor(colorMuted());
                 metadata.setPadding(dp(36), 0, dp(4), dp(4));
                 item.addView(metadata, matchParams());
                 TextView details = text("View details  →", 13);
-                details.setTextColor(0xFF3659D9);
+                details.setTextColor(colorPrimary());
                 details.setPadding(dp(36), dp(8), dp(4), dp(4));
                 details.setOnClickListener(v -> showDomainDetails(domain));
                 item.addView(details, matchParams());
@@ -391,7 +439,7 @@ public class MainActivity extends Activity {
         } catch (JSONException ignored) { }
         setupRoot();
         TextView back = text("←  DNS HISTORY", 12);
-        back.setTextColor(0xFF3659D9);
+        back.setTextColor(colorPrimary());
         back.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         back.setOnClickListener(v -> showDomainPicker());
         root.addView(back, marginParams(0, 0, 0, 18));
@@ -399,7 +447,7 @@ public class MainActivity extends Activity {
         subtitle("DNS lookup details");
         LinearLayout details = card();
         TextView label = text("RESOLVED IP ADDRESSES", 11);
-        label.setTextColor(0xFF65708A);
+        label.setTextColor(colorMuted());
         label.setLetterSpacing(0.08f);
         details.addView(label, matchParams());
         JSONArray ips = found == null ? null : found.optJSONArray("ips");
@@ -414,12 +462,12 @@ public class MainActivity extends Activity {
                 ip.setPadding(0, dp(10), 0, dp(10));
                 details.addView(ip, matchParams());
                 View divider = new View(this);
-                divider.setBackgroundColor(0xFFE6EAF2);
+                divider.setBackgroundColor(colorDivider());
                 details.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
             }
         }
         TextView seen = text("Last observed\\n" + (found == null ? "Unknown" : found.optString("timestamp", "Unknown")), 13);
-        seen.setTextColor(0xFF65708A);
+        seen.setTextColor(colorMuted());
         details.addView(seen, marginParams(0, 12, 0, 0));
         root.addView(details, marginParams(0, 4, 0, 14));
         Button copy = button("Copy domain and IPs");
@@ -438,14 +486,14 @@ public class MainActivity extends Activity {
         LinearLayout status = card();
         TextView eyebrow = text("CAPTURE STATUS", 11);
         eyebrow.setLetterSpacing(0.08f);
-        eyebrow.setTextColor(0xFF65708A);
+        eyebrow.setTextColor(colorMuted());
         status.addView(eyebrow, matchParams());
         TextView headline = text(active ? "●  Capture is running" : "○  Capture is stopped", 18);
         headline.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        headline.setTextColor(active ? 0xFF13845B : 0xFF5F687A);
+        headline.setTextColor(active ? (darkMode ? 0xFF5FE0A2 : 0xFF13845B) : colorMuted());
         status.addView(headline, marginParams(0, 6, 0, 2));
         TextView countView = text(count + (count == 1 ? " DNS query captured" : " DNS queries captured"), 13);
-        countView.setTextColor(0xFF65708A);
+        countView.setTextColor(colorMuted());
         status.addView(countView, matchParams());
         Button refresh = button("Refresh capture status");
         refresh.setOnClickListener(v -> showAppPicker());
@@ -464,7 +512,7 @@ public class MainActivity extends Activity {
         TextView note = text(
                 "These are byte counters, not domains or full packet capture. Android may report a counter as unavailable on some devices.",
                 14);
-        note.setTextColor(0xFF60646C);
+        note.setTextColor(colorMuted());
         root.addView(note, marginParams(0, 0, 0, 12));
 
         Button refresh = button("Refresh");
@@ -518,7 +566,7 @@ public class MainActivity extends Activity {
             statRow.addView(item, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             list.addView(statRow, matchParams());
             View divider = new View(this);
-            divider.setBackgroundColor(0xFFE0E0E0);
+            divider.setBackgroundColor(colorDivider());
             list.addView(divider, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
         }
@@ -546,13 +594,13 @@ public class MainActivity extends Activity {
     private void title(String value) {
         TextView view = text(value, 28);
         view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        view.setTextColor(0xFF17233F);
+        view.setTextColor(colorText());
         root.addView(view, marginParams(0, 0, 0, 6));
     }
 
     private void subtitle(String value) {
         TextView view = text(value, 14);
-        view.setTextColor(0xFF65708A);
+        view.setTextColor(colorMuted());
         root.addView(view, marginParams(0, 0, 0, 14));
     }
 
@@ -560,6 +608,7 @@ public class MainActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
+        view.setTextColor(colorText());
         return view;
     }
 
@@ -571,7 +620,7 @@ public class MainActivity extends Activity {
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setTextColor(0xFFFFFFFF);
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xFF3659D9);
+        bg.setColor(colorPrimary());
         bg.setCornerRadius(dp(14));
         button.setBackground(bg);
         if (Build.VERSION.SDK_INT >= 21) button.setElevation(dp(1));
@@ -579,14 +628,30 @@ public class MainActivity extends Activity {
         return button;
     }
 
+    private GradientDrawable cardBackground() {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(colorCard());
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), colorBorder());
+        return bg;
+    }
+
+    private int colorBackground() { return darkMode ? 0xFF10141D : 0xFFF3F5FA; }
+    private int colorCard() { return darkMode ? 0xFF1B2230 : Color.WHITE; }
+    private int colorText() { return darkMode ? 0xFFE8EDF7 : 0xFF17233F; }
+    private int colorMuted() { return darkMode ? 0xFFA4AEC2 : 0xFF65708A; }
+    private int colorBorder() { return darkMode ? 0xFF30394B : 0xFFE4E9F2; }
+    private int colorDivider() { return darkMode ? 0xFF30394B : 0xFFE6EAF2; }
+    private int colorPrimary() { return darkMode ? 0xFF7C9BFF : 0xFF3659D9; }
+
     private LinearLayout card() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(14), dp(16), dp(14));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.WHITE);
+        bg.setColor(colorCard());
         bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), 0xFFE4E9F2);
+        bg.setStroke(dp(1), colorBorder());
         card.setBackground(bg);
         if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(1));
         return card;
