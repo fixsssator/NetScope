@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-10-11
+### Improved
+- Redesigned the main screen with a clearer capture status card and refreshed visual styling.
+- Capture notification now shows an active state and live DNS query count, opens the app on tap, and provides a Stop action.
+- DNS history shows resolved IPv4/IPv6 addresses and a per-domain detail screen.
+- Added Android notification permission request so the foreground capture notification can appear in the notification shade.
+
+
 ## [0.3.0] - 2026-10-11
 ### Added
 - Initial local VPN-based IPv4 UDP DNS observation for selected apps.
