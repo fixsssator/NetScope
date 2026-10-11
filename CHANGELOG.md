@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0] - 2026-10-11
+### Added
+- Dark theme with a persistent light/dark preference.
+- Installed-app icons in the app picker and per-app traffic list.
+- A toggle to include or hide system apps.
+- Custom adaptive NetScope launcher icon.
+
+### Improved
+- App list entries use compact cards and preserve selected packages when the screen is refreshed.
+
+
 ## [0.4.0] - 2026-10-11
 ### Improved
 - Redesigned the main screen with a clearer capture status card and refreshed visual styling.
