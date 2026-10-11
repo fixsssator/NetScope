@@ -94,8 +94,9 @@ public class DnsCaptureService extends VpnService {
                 if (domain != null) {
                     List<String> ips = response == null ? new ArrayList<>() : answerIps(response);
                     save(domain, ips);
-                    capturedCount++;
+                    capturedCount = getSharedPreferences(PREFS, MODE_PRIVATE).getInt("capture_count", capturedCount) + 1;
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt("capture_count", capturedCount).apply();
+                    Log.d(TAG, "Captured DNS query: " + domain + " -> " + ips);
                     getSystemService(NotificationManager.class).notify(NOTIFICATION_ID, notification());
                 }
                 if (response != null) {
