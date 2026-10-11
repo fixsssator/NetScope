@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.TrafficStats;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -58,6 +59,9 @@ public class MainActivity extends Activity {
         setupRoot();
         title("NetScope");
         subtitle("Choose which apps you want to inspect.");
+        Button trafficStats = button("View per-app traffic stats");
+        trafficStats.setOnClickListener(v -> showTrafficStats());
+        root.addView(trafficStats, marginParams(0, 0, 0, 12));
         TextView note = text("This starter build does not capture live network traffic yet.", 14);
         note.setTextColor(0xFFB45309);
         root.addView(note, marginParams(0, 4, 0, 12));
@@ -227,6 +231,86 @@ public class MainActivity extends Activity {
         Button back = button("Back to app selection");
         back.setOnClickListener(v -> showAppPicker());
         root.addView(back, matchParams());
+    }
+
+
+    private void showTrafficStats() {
+        setupRoot();
+        title("Per-app traffic");
+        subtitle("Received and sent bytes since the device booted, where Android exposes per-app counters.");
+
+        TextView note = text(
+                "These are byte counters, not domains or full packet capture. Android may report a counter as unavailable on some devices.",
+                14);
+        note.setTextColor(0xFF60646C);
+        root.addView(note, marginParams(0, 0, 0, 12));
+
+        Button refresh = button("Refresh");
+        refresh.setOnClickListener(v -> showTrafficStats());
+        root.addView(refresh, marginParams(0, 0, 0, 8));
+
+        Button back = button("Back to app selection");
+        back.setOnClickListener(v -> showAppPicker());
+        root.addView(back, marginParams(0, 0, 0, 12));
+
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        root.addView(list, matchParams());
+
+        PackageManager pm = getPackageManager();
+        List<ApplicationInfo> apps = new ArrayList<>();
+        try {
+            apps.addAll(pm.getInstalledApplications(PackageManager.GET_META_DATA));
+        } catch (RuntimeException ignored) {
+            // Display whatever the platform allows us to enumerate.
+        }
+        Collections.sort(apps, new Comparator<ApplicationInfo>() {
+            @Override public int compare(ApplicationInfo a, ApplicationInfo b) {
+                long aTotal = safeTotal(a.uid);
+                long bTotal = safeTotal(b.uid);
+                return Long.compare(bTotal, aTotal);
+            }
+        });
+
+        for (ApplicationInfo info : apps) {
+            long rx = TrafficStats.getUidRxBytes(info.uid);
+            long tx = TrafficStats.getUidTxBytes(info.uid);
+            String label;
+            try {
+                label = pm.getApplicationLabel(info).toString();
+            } catch (RuntimeException e) {
+                label = info.packageName;
+            }
+            String rxText = rx < 0 ? "Unavailable" : formatBytes(rx);
+            String txText = tx < 0 ? "Unavailable" : formatBytes(tx);
+            TextView item = text(label + "\\n" + info.packageName
+                    + "\\nReceived: " + rxText + " · Sent: " + txText, 14);
+            item.setPadding(dp(4), dp(8), dp(4), dp(8));
+            list.addView(item, matchParams());
+            View divider = new View(this);
+            divider.setBackgroundColor(0xFFE0E0E0);
+            list.addView(divider, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
+        }
+    }
+
+    private long safeTotal(int uid) {
+        long rx = TrafficStats.getUidRxBytes(uid);
+        long tx = TrafficStats.getUidTxBytes(uid);
+        if (rx < 0 || tx < 0) return -1;
+        return rx + tx;
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        double value = bytes;
+        String[] units = {"B", "KB", "MB", "GB", "TB"};
+        int unit = 0;
+        while (value >= 1024 && unit < units.length - 1) {
+            value /= 1024;
+            unit++;
+        }
+        return String.format(Locale.ROOT, "%.1f %s", value, units[unit]);
     }
 
     private void title(String value) {
