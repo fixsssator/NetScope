@@ -1,63 +1,44 @@
 # NetScope
 
-NetScope is an Android networking utility project built in Java for the CS50 final project.
-
-The goal is to help users choose which installed apps they want to inspect, review observed domains and IP addresses, select individual entries, and copy only the selected values.
+NetScope is an Android networking utility project built in Java for the CS50 final project. It lets users select installed apps, observe DNS query names locally, review domain history, and copy selected domains.
 
 ## Versioning
 
-The current app version is **0.2.0** (`versionCode` 2). The version is defined in `gradle.properties` as `appVersionName` and `appVersionCode`; `app/build.gradle` reads those values. Follow semantic versioning for `appVersionName` and always increase `appVersionCode` for a new Android build. Pushing a tag such as `v0.2.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
+Current development version: **0.3.0** (`versionCode` 3). Versions are defined in `gradle.properties` as `appVersionName` and `appVersionCode`. Follow semantic versioning for the name and always increase the code for a new Android build. Pushing a tag such as `v0.3.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+See [CHANGELOG.md](CHANGELOG.md).
 
-## Current status
+## Features
 
-This repository contains the initial Android app scaffold:
-- English UI
-- Installed-app selection with checkboxes
-- Select all / clear selection
-- Per-app received/sent byte counters since device boot (when Android exposes UID counters)
-- A selectable domain list
-- Copy selected domains to the clipboard
-- GitHub Actions build workflow
+- English UI and installed-app picker with search, select all, and clear
+- Local VPN-based IPv4 UDP DNS observation for explicitly selected apps
+- On-device domain history with timestamps
+- Select and copy observed domains
+- Per-app received/sent byte counters where Android exposes UID counters
+- Persistent notification with a Stop action while observation is active
+- GitHub Actions build and versioned APK artifacts
 
-**Important:** live packet capture, per-app attribution of individual connections, and real domain discovery are not implemented yet. The traffic statistics screen displays Android's per-UID byte counters where available; these counters do not identify domains and may be unavailable on some devices. The domain screen currently uses clearly labelled sample entries so the selection and copy workflow can be tested without pretending that sample data is captured traffic.
+## DNS observation scope and limitations
+
+NetScope creates a local Android VPN interface and routes only its synthetic IPv4 DNS address through the tunnel. Queries are forwarded to Cloudflare DNS at **1.1.1.1** and responses are returned to the app. Observed history is stored locally; NetScope does not upload it to a NetScope server.
+
+This is DNS observation, not full packet capture. DNS-over-TLS, DNS-over-HTTPS, IPv6 DNS, hard-coded resolvers, and other bypass paths may not be observed. TUN packets do not reliably identify which selected app originated a DNS query, so captured DNS events are not attributed to individual apps. Behavior varies by Android version and device. Stop the session if name resolution or connectivity behaves unexpectedly.
+
+The app does not inspect TLS traffic, page URLs, messages, or other application payloads. The configured upstream resolver receives the queried domain names.
 
 ## Build
 
-Requirements:
-- JDK 17
-- Gradle 8.11.1
-- Android SDK (platform 35)
-
-From the repository root:
+Requirements: JDK 17, Gradle 8.11.1, Android SDK platform 35.
 
 ```bash
 gradle assembleDebug
 ```
 
-The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`. CI also uploads a version-named APK artifact. Pushing a `v*` tag creates a GitHub Release with the APK attached.
-
-You can also run the **Android CI** workflow from the Actions tab. Successful builds upload the debug APK as a workflow artifact.
-
-## Install in Android Studio
-
-1. Clone or download this repository.
-2. Open the project directory in Android Studio.
-3. Allow Gradle to sync and install the required Android SDK platform.
-4. Run the `app` configuration on an emulator or device.
-
-## Planned work
-
-1. Implement local VPN-based DNS observation with safe packet handling and without silently breaking device connectivity.
-2. Investigate reliable per-app attribution and Android-version limitations.
-3. Store capture sessions and observations locally.
-4. Add filters, deduplication, timestamps, and TXT/CSV export.
-5. Add tests and document capture limitations.
+The APK is created at `app/build/outputs/apk/debug/app-debug.apk`. CI uploads a version-named artifact. Pushing a `v*` tag creates a GitHub Release with the APK attached.
 
 ## Privacy
 
-The initial version does not send captured data to a remote server. Live capture is not implemented in this scaffold. App visibility is requested only to populate the installed-app picker.
+DNS names and timestamps are stored in app preferences on the device. Queries are sent to Cloudflare DNS (1.1.1.1), which receives the queried names. No NetScope-operated server receives the history. Installed-app visibility is requested to populate the picker.
 
 ## License
 
