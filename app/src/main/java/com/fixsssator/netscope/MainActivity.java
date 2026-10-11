@@ -499,15 +499,16 @@ public class MainActivity extends Activity {
     }
 
     private void title(String value) {
-        TextView view = text(value, 26);
+        TextView view = text(value, 28);
         view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        root.addView(view, marginParams(0, 0, 0, 4));
+        view.setTextColor(0xFF17233F);
+        root.addView(view, marginParams(0, 0, 0, 6));
     }
 
     private void subtitle(String value) {
-        TextView view = text(value, 15);
-        view.setTextColor(0xFF60646C);
-        root.addView(view, marginParams(0, 0, 0, 12));
+        TextView view = text(value, 14);
+        view.setTextColor(0xFF65708A);
+        root.addView(view, marginParams(0, 0, 0, 14));
     }
 
     private TextView text(String value, int size) {
@@ -520,7 +521,30 @@ public class MainActivity extends Activity {
     private Button button(String label) {
         Button button = new Button(this);
         button.setText(label);
+        button.setAllCaps(false);
+        button.setTextSize(14);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setTextColor(0xFFFFFFFF);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFF3659D9);
+        bg.setCornerRadius(dp(14));
+        button.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) button.setElevation(dp(1));
+        button.setPadding(dp(12), dp(4), dp(12), dp(4));
         return button;
+    }
+
+    private LinearLayout card() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.WHITE);
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(1), 0xFFE4E9F2);
+        card.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(1));
+        return card;
     }
 
     private LinearLayout row() {
