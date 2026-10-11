@@ -324,21 +324,99 @@ public class MainActivity extends Activity {
         Toast.makeText(this, "DNS observation stop requested.", Toast.LENGTH_SHORT).show();
     }
 
-    private LinkedHashMap<String, String> loadObservedDomains() {
-        LinkedHashMap<String, String> result = new LinkedHashMap<>();
+    private LinkedHashMap<String, JSONObject> loadObservedDomains() {
+        LinkedHashMap<String, JSONObject> result = new LinkedHashMap<>();
         String json = getSharedPreferences("netscope_capture", MODE_PRIVATE).getString("dns_history", "[]");
         try {
             JSONArray events = new JSONArray(json);
             for (int i = events.length() - 1; i >= 0; i--) {
                 JSONObject event = events.getJSONObject(i);
                 String domain = event.optString("domain", "");
-                String timestamp = event.optString("timestamp", "");
-                if (!domain.isEmpty() && !result.containsKey(domain)) result.put(domain, timestamp);
+                if (!domain.isEmpty() && !result.containsKey(domain)) result.put(domain, event);
             }
-        } catch (JSONException ignored) {
-            // Keep the history screen usable if local history is damaged.
-        }
+        } catch (JSONException ignored) { }
         return result;
+    }
+
+    private String formatIps(JSONArray ips) {
+        if (ips == null || ips.length() == 0) return "";
+        List<String> values = new ArrayList<>();
+        for (int i = 0; i < ips.length(); i++) values.add(ips.optString(i));
+        return String.join("  ·  ", values);
+    }
+
+    private void showDomainDetails(String domain) {
+        JSONObject found = null;
+        String json = getSharedPreferences("netscope_capture", MODE_PRIVATE).getString("dns_history", "[]");
+        try {
+            JSONArray events = new JSONArray(json);
+            for (int i = events.length() - 1; i >= 0; i--) {
+                JSONObject event = events.getJSONObject(i);
+                if (domain.equals(event.optString("domain"))) { found = event; break; }
+            }
+        } catch (JSONException ignored) { }
+        setupRoot();
+        TextView back = text("←  DNS HISTORY", 12);
+        back.setTextColor(0xFF3659D9);
+        back.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        back.setOnClickListener(v -> showDomainPicker());
+        root.addView(back, marginParams(0, 0, 0, 18));
+        title(domain);
+        subtitle("DNS lookup details");
+        LinearLayout details = card();
+        TextView label = text("RESOLVED IP ADDRESSES", 11);
+        label.setTextColor(0xFF65708A);
+        label.setLetterSpacing(0.08f);
+        details.addView(label, matchParams());
+        JSONArray ips = found == null ? null : found.optJSONArray("ips");
+        if (ips == null || ips.length() == 0) {
+            TextView noIp = text("No IP address was present in the DNS response.", 14);
+            noIp.setPadding(0, dp(8), 0, dp(8));
+            details.addView(noIp, matchParams());
+        } else {
+            for (int i = 0; i < ips.length(); i++) {
+                TextView ip = text("◈  " + ips.optString(i), 16);
+                ip.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+                ip.setPadding(0, dp(10), 0, dp(10));
+                details.addView(ip, matchParams());
+                View divider = new View(this);
+                divider.setBackgroundColor(0xFFE6EAF2);
+                details.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+            }
+        }
+        TextView seen = text("Last observed\\n" + (found == null ? "Unknown" : found.optString("timestamp", "Unknown")), 13);
+        seen.setTextColor(0xFF65708A);
+        details.addView(seen, marginParams(0, 12, 0, 0));
+        root.addView(details, marginParams(0, 4, 0, 14));
+        Button copy = button("Copy domain and IPs");
+        copy.setOnClickListener(v -> {
+            String value = domain + "\\n" + formatIps(ips);
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("NetScope DNS details", value));
+            Toast.makeText(this, "DNS details copied.", Toast.LENGTH_SHORT).show();
+        });
+        root.addView(copy, matchParams());
+    }
+
+    private void addCaptureStatusCard() {
+        boolean active = getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false);
+        int count = getSharedPreferences("netscope_capture", MODE_PRIVATE).getInt("capture_count", 0);
+        LinearLayout status = card();
+        TextView eyebrow = text("CAPTURE STATUS", 11);
+        eyebrow.setLetterSpacing(0.08f);
+        eyebrow.setTextColor(0xFF65708A);
+        status.addView(eyebrow, matchParams());
+        TextView headline = text(active ? "●  Capture is running" : "○  Capture is stopped", 18);
+        headline.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        headline.setTextColor(active ? 0xFF13845B : 0xFF5F687A);
+        status.addView(headline, marginParams(0, 6, 0, 2));
+        TextView countView = text(count + (count == 1 ? " DNS query captured" : " DNS queries captured"), 13);
+        countView.setTextColor(0xFF65708A);
+        status.addView(countView, matchParams());
+        Button view = button("Open domain history");
+        view.setOnClickListener(v -> showDomainPicker());
+        status.addView(view, marginParams(0, 10, 0, 0));
+        root.addView(status, marginParams(0, 0, 0, 16));
     }
 
     private void showTrafficStats() {
