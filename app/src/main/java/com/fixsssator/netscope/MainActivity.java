@@ -45,10 +45,18 @@ public class MainActivity extends Activity {
     private boolean darkMode;
     private boolean includeSystemApps;
     private String currentScreen = "apps";
+    private LinearLayout liveControls;
+    private LinearLayout domainListView;
+    private EditText appSearchView;
+    private EditText domainSearchView;
+    private android.os.Handler liveHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable liveRefresh;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        java.util.Set<String> saved = getSharedPreferences("netscope_settings", MODE_PRIVATE).getStringSet("selected_packages", Collections.<String>emptySet());
+        selectedPackageNames = new ArrayList<>(saved);
         if (getIntent().getBooleanExtra("open_dns_history", false)) showDomainPicker();
         else showAppPicker();
     }
@@ -81,6 +89,32 @@ public class MainActivity extends Activity {
             getWindow().getDecorView().setSystemUiVisibility(darkMode ? 0 :
                     (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR));
         }
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackgroundColor(colorBackground());
+        liveControls = new LinearLayout(this);
+        liveControls.setOrientation(LinearLayout.VERTICAL);
+        liveControls.setPadding(dp(12), dp(8), dp(12), dp(8));
+        liveControls.setBackgroundColor(colorCard());
+        TextView liveStatus = text(getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false) ? "● DNS observation is running" : "○ DNS observation is stopped", 13);
+        liveStatus.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        liveStatus.setTextColor(colorText());
+        liveControls.addView(liveStatus, matchParams());
+        LinearLayout globalActions = row();
+        Button globalToggle = button(getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false) ? "Stop DNS" : "Start DNS");
+        globalToggle.setOnClickListener(v -> {
+            if (getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false)) stopDnsCapture();
+            else {
+                selectedPackageNames = getSavedSelectedPackages();
+                requestDnsStart();
+            }
+        });
+        Button globalLive = button("Live domains");
+        globalLive.setOnClickListener(v -> showDomainPicker());
+        globalActions.addView(globalToggle, weightParams());
+        globalActions.addView(globalLive, weightParams());
+        liveControls.addView(globalActions, marginParams(0, 4, 0, 0));
+        outer.addView(liveControls, matchParams());
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -88,10 +122,12 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(colorBackground());
         scroll.setFillViewport(true);
         scroll.addView(root);
-        setContentView(scroll);
+        outer.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        setContentView(outer);
     }
 
     private void showAppPicker() {
+        stopLiveRefresh();
         currentScreen = "apps";
         setupRoot();
         title("NetScope");
@@ -106,7 +142,6 @@ public class MainActivity extends Activity {
             showAppPicker();
         });
         root.addView(themeToggle, marginParams(0, 0, 0, 14));
-        addCaptureStatusCard();
         subtitle("Choose apps to observe.");
         Button trafficStats = button("View per-app traffic stats");
         trafficStats.setOnClickListener(v -> showTrafficStats());
@@ -116,10 +151,12 @@ public class MainActivity extends Activity {
         root.addView(note, marginParams(0, 4, 0, 12));
 
         EditText search = new EditText(this);
+        appSearchView = search;
         search.setSingleLine(true);
         search.setTextColor(colorText());
         search.setHintTextColor(colorMuted());
         search.setHint("Search installed apps");
+        search.setText(getSharedPreferences("netscope_settings", MODE_PRIVATE).getString("app_filter", ""));
         root.addView(search, matchParams());
 
         Button systemToggle = button(includeSystemApps ? "Hide system apps" : "Show system apps");
@@ -151,8 +188,10 @@ public class MainActivity extends Activity {
         }
         Collections.sort(apps, new Comparator<ApplicationInfo>() {
             @Override public int compare(ApplicationInfo a, ApplicationInfo b) {
-                return pm.getApplicationLabel(a).toString()
-                        .compareToIgnoreCase(pm.getApplicationLabel(b).toString());
+                boolean selectedA = selectedPackageNames.contains(a.packageName);
+                boolean selectedB = selectedPackageNames.contains(b.packageName);
+                if (selectedA != selectedB) return selectedA ? -1 : 1;
+                return pm.getApplicationLabel(a).toString().compareToIgnoreCase(pm.getApplicationLabel(b).toString());
             }
         });
 
@@ -185,6 +224,7 @@ public class MainActivity extends Activity {
             check.setTextColor(colorText());
             check.setTag(info.packageName);
             if (selectedPackageNames.contains(info.packageName)) check.setChecked(true);
+            check.setOnCheckedChangeListener((buttonView, isChecked) -> saveSelectedPackagesFromChecks());
             appRow.addView(check, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             list.addView(appRow, marginParams(0, 0, 0, 6));
             appChecks.add(check);
@@ -193,6 +233,7 @@ public class MainActivity extends Activity {
         search.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                getSharedPreferences("netscope_settings", MODE_PRIVATE).edit().putString("app_filter", s.toString()).apply();
                 String query = s.toString().toLowerCase(Locale.ROOT).trim();
                 for (CheckBox check : appChecks) {
                     boolean visible = check.getText().toString().toLowerCase(Locale.ROOT).contains(query);
@@ -204,12 +245,15 @@ public class MainActivity extends Activity {
 
         all.setOnClickListener(v -> {
             for (CheckBox check : appChecks) {
-                if (check.getParent() instanceof View
-                        && ((View) check.getParent()).getVisibility() == View.VISIBLE) check.setChecked(true);
+                if (check.getParent() instanceof View && ((View) check.getParent()).getVisibility() == View.VISIBLE) check.setChecked(true);
             }
+            saveSelectedPackagesFromChecks();
+            showAppPicker();
         });
         none.setOnClickListener(v -> {
             for (CheckBox check : appChecks) check.setChecked(false);
+            saveSelectedPackagesFromChecks();
+            showAppPicker();
         });
 
         Button continueButton = button("Continue to domains");
@@ -219,6 +263,7 @@ public class MainActivity extends Activity {
                 if (check.isChecked()) selected.add(String.valueOf(check.getTag()));
             }
             selectedPackageNames = new ArrayList<>(selected);
+            saveSelectedPackages(selectedPackageNames);
             selectedAppLabel = selected.isEmpty()
                     ? "No app selected" : selected.size() + " selected app(s)";
             showDomainPicker();
@@ -238,10 +283,12 @@ public class MainActivity extends Activity {
         root.addView(warning, marginParams(0, 4, 0, 12));
 
         EditText search = new EditText(this);
+        domainSearchView = search;
         search.setSingleLine(true);
         search.setTextColor(colorText());
         search.setHintTextColor(colorMuted());
         search.setHint("Filter domains or IP addresses");
+        search.setText(getSharedPreferences("netscope_settings", MODE_PRIVATE).getString("domain_filter", ""));
         root.addView(search, matchParams());
 
         LinearLayout actions = row();
@@ -252,10 +299,13 @@ public class MainActivity extends Activity {
         root.addView(actions, marginParams(0, 8, 0, 8));
 
         LinearLayout list = new LinearLayout(this);
+        domainListView = list;
         list.setOrientation(LinearLayout.VERTICAL);
         root.addView(list, matchParams());
         domainChecks.clear();
 
+        renderDomainList(list, search.getText().toString());
+        /*
         LinkedHashMap<String, JSONObject> domains = loadObservedDomains();
         if (domains.isEmpty()) {
             LinearLayout empty = card();
@@ -293,15 +343,20 @@ public class MainActivity extends Activity {
             }
         }
 
+        */
         search.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                getSharedPreferences("netscope_settings", MODE_PRIVATE).edit().putString("domain_filter", s.toString()).apply();
                 String query = s.toString().toLowerCase(Locale.ROOT).trim();
+                renderDomainList(list, s.toString());
+                /*
                 for (CheckBox check : domainChecks) {
                     boolean visible = String.valueOf(check.getTag()).toLowerCase(Locale.ROOT).contains(query);
                     check.setVisibility(View.VISIBLE);
                     if (check.getParent() instanceof View) ((View) check.getParent()).setVisibility(visible ? View.VISIBLE : View.GONE);
                 }
+                */
             }
             @Override public void afterTextChanged(android.text.Editable s) {}
         });
@@ -314,6 +369,8 @@ public class MainActivity extends Activity {
         none.setOnClickListener(v -> {
             for (CheckBox check : domainChecks) check.setChecked(false);
         });
+
+        startLiveRefresh();
 
         Button copySelected = button("Copy selected (0)");
         for (CheckBox check : domainChecks) {
@@ -403,7 +460,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
         else startService(intent);
         Toast.makeText(this, "DNS observation requested. Check the persistent notification.", Toast.LENGTH_LONG).show();
-        new android.os.Handler(getMainLooper()).postDelayed(this::showAppPicker, 700);
+        new android.os.Handler(getMainLooper()).postDelayed(this::showDomainPicker, 700);
     }
 
     private void stopDnsCapture() {
@@ -412,6 +469,95 @@ public class MainActivity extends Activity {
         startService(intent);
         Toast.makeText(this, "DNS observation stop requested.", Toast.LENGTH_SHORT).show();
         new android.os.Handler(getMainLooper()).postDelayed(this::showAppPicker, 700);
+    }
+
+    private ArrayList<String> getSavedSelectedPackages() {
+        return new ArrayList<>(getSharedPreferences("netscope_settings", MODE_PRIVATE)
+                .getStringSet("selected_packages", Collections.<String>emptySet()));
+    }
+
+    private void saveSelectedPackages(List<String> packages) {
+        getSharedPreferences("netscope_settings", MODE_PRIVATE).edit()
+                .putStringSet("selected_packages", new java.util.HashSet<>(packages)).apply();
+    }
+
+    private void saveSelectedPackagesFromChecks() {
+        ArrayList<String> selected = new ArrayList<>();
+        for (CheckBox check : appChecks) if (check.isChecked()) selected.add(String.valueOf(check.getTag()));
+        selectedPackageNames = selected;
+        saveSelectedPackages(selected);
+    }
+
+    private void startLiveRefresh() {
+        stopLiveRefresh();
+        liveRefresh = new Runnable() {
+            @Override public void run() {
+                if (!"history".equals(currentScreen) || domainListView == null) return;
+                int scrollY = findScrollView().getScrollY();
+                String filter = domainSearchView == null ? "" : domainSearchView.getText().toString();
+                renderDomainList(domainListView, filter);
+                findScrollView().post(() -> findScrollView().scrollTo(0, scrollY));
+                liveHandler.postDelayed(this, 1200);
+            }
+        };
+        liveHandler.postDelayed(liveRefresh, 800);
+    }
+
+    private ScrollView findScrollView() {
+        View content = root;
+        if (content.getParent() instanceof ScrollView) return (ScrollView) content.getParent();
+        return new ScrollView(this);
+    }
+
+    private void stopLiveRefresh() {
+        if (liveRefresh != null) liveHandler.removeCallbacks(liveRefresh);
+        liveRefresh = null;
+    }
+
+    private void renderDomainList(LinearLayout list, String filterText) {
+        if (list == null) return;
+        list.removeAllViews();
+        domainChecks.clear();
+        String query = filterText == null ? "" : filterText.toLowerCase(Locale.ROOT).trim();
+        LinkedHashMap<String, JSONObject> domains = loadObservedDomains();
+        int visibleCount = 0;
+        for (String domain : domains.keySet()) {
+            JSONObject event = domains.get(domain);
+            String ipsText = formatIps(event.optJSONArray("ips"));
+            if (!domain.toLowerCase(Locale.ROOT).contains(query) && !ipsText.toLowerCase(Locale.ROOT).contains(query)) continue;
+            visibleCount++;
+            LinearLayout item = card();
+            CheckBox check = new CheckBox(this);
+            check.setText(domain);
+            check.setTextSize(15);
+            check.setTextColor(colorText());
+            check.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            check.setTag(domain);
+            item.addView(check, matchParams());
+            domainChecks.add(check);
+            TextView metadata = text((ipsText.isEmpty() ? "No IP address in response" : ipsText)
+                    + "\\nLast seen  " + event.optString("timestamp", "Unknown"), 12);
+            metadata.setTextColor(colorMuted());
+            metadata.setPadding(dp(36), 0, dp(4), dp(4));
+            item.addView(metadata, matchParams());
+            TextView details = text("View details  →", 13);
+            details.setTextColor(colorPrimary());
+            details.setPadding(dp(36), dp(8), dp(4), dp(4));
+            details.setOnClickListener(v -> showDomainDetails(domain));
+            item.addView(details, matchParams());
+            list.addView(item, marginParams(0, 0, 0, 10));
+        }
+        if (visibleCount == 0) {
+            LinearLayout empty = card();
+            TextView message = text(getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false)
+                    ? "Waiting for DNS queries…" : "No matching DNS domains", 17);
+            message.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            empty.addView(message, matchParams());
+            TextView hint = text("Newly observed domains and IP addresses appear here automatically while DNS observation is running.", 13);
+            hint.setTextColor(colorMuted());
+            empty.addView(hint, marginParams(0, 6, 0, 0));
+            list.addView(empty, marginParams(0, 8, 0, 8));
+        }
     }
 
     private LinkedHashMap<String, JSONObject> loadObservedDomains() {
@@ -436,6 +582,7 @@ public class MainActivity extends Activity {
     }
 
     private void showDomainDetails(String domain) {
+        stopLiveRefresh();
         currentScreen = "details";
         JSONObject found = null;
         String json = getSharedPreferences("netscope_capture", MODE_PRIVATE).getString("dns_history", "[]");
@@ -524,6 +671,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTrafficStats() {
+        stopLiveRefresh();
         currentScreen = "traffic";
         setupRoot();
         title("Per-app traffic");
