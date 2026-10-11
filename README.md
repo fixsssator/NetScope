@@ -4,18 +4,20 @@ NetScope is an Android networking utility project built in Java for the CS50 fin
 
 ## Versioning
 
-Current development version: **0.4.0** (`versionCode` 4). Versions are defined in `gradle.properties` as `appVersionName` and `appVersionCode`. Follow semantic versioning for the name and always increase the code for a new Android build. Pushing a tag such as `v0.3.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
+Current development version: **0.5.0** (`versionCode` 5). Versions are defined in `gradle.properties` as `appVersionName` and `appVersionCode`. Follow semantic versioning for the name and always increase the code for a new Android build. Pushing a tag such as `v0.3.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
 
 See [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
-- English UI and installed-app picker with search, select all, and clear
+- English UI with dark/light themes and an installed-app picker featuring icons, search, select all, and clear
+- Toggle to include or hide system apps
+- Custom adaptive launcher icon
 - Local VPN-based IPv4 UDP DNS observation for explicitly selected apps
-- On-device domain history with timestamps
+- On-device domain history with timestamps and returned IP addresses
 - Select and copy observed domains
 - Per-app received/sent byte counters where Android exposes UID counters
-- Persistent notification with a Stop action while observation is active
+- Persistent capture notification with status, query count, and a Stop action while observation is active
 - GitHub Actions build and versioned APK artifacts
 
 ## DNS observation scope and limitations
