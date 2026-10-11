@@ -4,10 +4,13 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.net.TrafficStats;
+import android.net.VpnService;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -23,13 +26,19 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.LinkedHashMap;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
     private final List<CheckBox> appChecks = new ArrayList<>();
     private final List<CheckBox> domainChecks = new ArrayList<>();
     private LinearLayout root;
-    private String selectedAppLabel = "Sample session";
+    private String selectedAppLabel = "No app selected";
+    private ArrayList<String> selectedPackageNames = new ArrayList<>();
+    private static final int VPN_PERMISSION_REQUEST = 700;
 
     private static final String[] SAMPLE_DOMAINS = {
             "api.example.com",
@@ -65,7 +74,7 @@ public class MainActivity extends Activity {
         Button trafficStats = button("View per-app traffic stats");
         trafficStats.setOnClickListener(v -> showTrafficStats());
         root.addView(trafficStats, marginParams(0, 0, 0, 12));
-        TextView note = text("This starter build does not capture live network traffic yet.", 14);
+        TextView note = text("DNS observation uses a local VPN and forwards IPv4 UDP DNS queries to Cloudflare (1.1.1.1).", 14);
         note.setTextColor(0xFFB45309);
         root.addView(note, marginParams(0, 4, 0, 12));
 
@@ -110,7 +119,7 @@ public class MainActivity extends Activity {
             CheckBox check = new CheckBox(this);
             check.setText(label + "\n" + info.packageName);
             check.setTextSize(14);
-            check.setTag(label);
+            check.setTag(info.packageName);
             list.addView(check, matchParams());
             appChecks.add(check);
         }
@@ -147,14 +156,26 @@ public class MainActivity extends Activity {
             showDomainPicker();
         });
         root.addView(continueButton, marginParams(0, 16, 0, 0));
+
+        Button startDns = button("Start DNS observation for selected apps");
+        startDns.setOnClickListener(v -> requestDnsStart());
+        root.addView(startDns, marginParams(0, 8, 0, 0));
+
+        Button stopDns = button("Stop DNS observation");
+        stopDns.setOnClickListener(v -> stopDnsCapture());
+        root.addView(stopDns, marginParams(0, 4, 0, 0));
+
+        Button history = button("View observed DNS history");
+        history.setOnClickListener(v -> showDomainPicker());
+        root.addView(history, marginParams(0, 4, 0, 0));
     }
 
     private void showDomainPicker() {
         setupRoot();
         title("Select domains");
-        subtitle(selectedAppLabel + " · Sample data only");
+        subtitle(selectedAppLabel + " · Locally stored DNS observations");
         TextView warning = text(
-                "These are example addresses, not observed connections. Live capture will be added in a later version.",
+                "Only DNS query names observed by the local VPN are listed here. This is not a list of all connections.",
                 14);
         warning.setTextColor(0xFFB45309);
         root.addView(warning, marginParams(0, 4, 0, 12));
@@ -176,13 +197,20 @@ public class MainActivity extends Activity {
         root.addView(list, matchParams());
         domainChecks.clear();
 
-        for (String domain : SAMPLE_DOMAINS) {
-            CheckBox check = new CheckBox(this);
-            check.setText(domain);
-            check.setTextSize(15);
-            check.setTag(domain);
-            list.addView(check, matchParams());
-            domainChecks.add(check);
+        LinkedHashMap<String, String> domains = loadObservedDomains();
+        if (domains.isEmpty()) {
+            TextView empty = text("No DNS queries recorded yet. Return to app selection and start an observation session.", 14);
+            empty.setTextColor(0xFF60646C);
+            list.addView(empty, marginParams(0, 8, 0, 8));
+        } else {
+            for (String domain : domains.keySet()) {
+                CheckBox check = new CheckBox(this);
+                check.setText(domain + "\\nLast seen: " + domains.get(domain));
+                check.setTextSize(15);
+                check.setTag(domain);
+                list.addView(check, matchParams());
+                domainChecks.add(check);
+            }
         }
 
         search.addTextChangedListener(new android.text.TextWatcher() {
@@ -236,6 +264,65 @@ public class MainActivity extends Activity {
         root.addView(back, matchParams());
     }
 
+
+    private void requestDnsStart() {
+        selectedPackageNames.clear();
+        for (CheckBox check : appChecks) {
+            if (check.isChecked()) selectedPackageNames.add(String.valueOf(check.getTag()));
+        }
+        if (selectedPackageNames.isEmpty()) {
+            Toast.makeText(this, "Select at least one app first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Intent permission = VpnService.prepare(this);
+        if (permission != null) {
+            startActivityForResult(permission, VPN_PERMISSION_REQUEST);
+        } else {
+            launchDnsService();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VPN_PERMISSION_REQUEST) {
+            if (resultCode == RESULT_OK) launchDnsService();
+            else Toast.makeText(this, "VPN permission was not granted.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void launchDnsService() {
+        Intent intent = new Intent(this, DnsCaptureService.class);
+        intent.setAction(DnsCaptureService.ACTION_START);
+        intent.putStringArrayListExtra(DnsCaptureService.EXTRA_PACKAGES, new ArrayList<>(selectedPackageNames));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
+        else startService(intent);
+        Toast.makeText(this, "DNS observation requested. Check the persistent notification.", Toast.LENGTH_LONG).show();
+    }
+
+    private void stopDnsCapture() {
+        Intent intent = new Intent(this, DnsCaptureService.class);
+        intent.setAction(DnsCaptureService.ACTION_STOP);
+        startService(intent);
+        Toast.makeText(this, "DNS observation stop requested.", Toast.LENGTH_SHORT).show();
+    }
+
+    private LinkedHashMap<String, String> loadObservedDomains() {
+        LinkedHashMap<String, String> result = new LinkedHashMap<>();
+        String json = getSharedPreferences("netscope_capture", MODE_PRIVATE).getString("dns_history", "[]");
+        try {
+            JSONArray events = new JSONArray(json);
+            for (int i = events.length() - 1; i >= 0; i--) {
+                JSONObject event = events.getJSONObject(i);
+                String domain = event.optString("domain", "");
+                String timestamp = event.optString("timestamp", "");
+                if (!domain.isEmpty() && !result.containsKey(domain)) result.put(domain, timestamp);
+            }
+        } catch (JSONException ignored) {
+            // Keep the history screen usable if local history is damaged.
+        }
+        return result;
+    }
 
     private void showTrafficStats() {
         setupRoot();
