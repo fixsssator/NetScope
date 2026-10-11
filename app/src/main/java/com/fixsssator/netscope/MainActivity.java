@@ -224,7 +224,23 @@ public class MainActivity extends Activity {
             check.setTextColor(colorText());
             check.setTag(info.packageName);
             if (selectedPackageNames.contains(info.packageName)) check.setChecked(true);
-            check.setOnCheckedChangeListener((buttonView, isChecked) -> saveSelectedPackagesFromChecks());
+            check.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                saveSelectedPackagesFromChecks();
+                if (isChecked) {
+                    list.removeView(appRow);
+                    int selectedRows = 0;
+                    for (int i = 0; i < list.getChildCount(); i++) {
+                        View child = list.getChildAt(i);
+                        if (child instanceof LinearLayout) {
+                            for (int j = 0; j < ((LinearLayout) child).getChildCount(); j++) {
+                                View rowChild = ((LinearLayout) child).getChildAt(j);
+                                if (rowChild instanceof CheckBox && ((CheckBox) rowChild).isChecked()) { selectedRows++; break; }
+                            }
+                        }
+                    }
+                    list.addView(appRow, Math.min(selectedRows, list.getChildCount()));
+                }
+            });
             appRow.addView(check, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             list.addView(appRow, marginParams(0, 0, 0, 6));
             appChecks.add(check);
@@ -409,9 +425,14 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 701);
             return;
         }
-        selectedPackageNames.clear();
-        for (CheckBox check : appChecks) {
-            if (check.isChecked()) selectedPackageNames.add(String.valueOf(check.getTag()));
+        if ("apps".equals(currentScreen)) {
+            selectedPackageNames.clear();
+            for (CheckBox check : appChecks) {
+                if (check.isChecked()) selectedPackageNames.add(String.valueOf(check.getTag()));
+            }
+            saveSelectedPackages(selectedPackageNames);
+        } else {
+            selectedPackageNames = getSavedSelectedPackages();
         }
         if (selectedPackageNames.isEmpty()) {
             Toast.makeText(this, "Select at least one app first.", Toast.LENGTH_LONG).show();
