@@ -10,11 +10,12 @@ This repository contains the initial Android app scaffold:
 - English UI
 - Installed-app selection with checkboxes
 - Select all / clear selection
+- Per-app received/sent byte counters since device boot (when Android exposes UID counters)
 - A selectable domain list
 - Copy selected domains to the clipboard
 - GitHub Actions build workflow
 
-**Important:** live packet capture, per-app traffic attribution, and real domain discovery are not implemented yet. The domain screen currently uses clearly labelled sample entries so the selection and copy workflow can be tested without pretending that sample data is captured traffic.
+**Important:** live packet capture, per-app attribution of individual connections, and real domain discovery are not implemented yet. The traffic statistics screen displays Android's per-UID byte counters where available; these counters do not identify domains and may be unavailable on some devices. The domain screen currently uses clearly labelled sample entries so the selection and copy workflow can be tested without pretending that sample data is captured traffic.
 
 ## Build
 
@@ -42,7 +43,7 @@ You can also run the **Android CI** workflow from the Actions tab. Successful bu
 
 ## Planned work
 
-1. Implement local VPN-based DNS observation with safe packet handling.
+1. Implement local VPN-based DNS observation with safe packet handling and without silently breaking device connectivity.
 2. Investigate reliable per-app attribution and Android-version limitations.
 3. Store capture sessions and observations locally.
 4. Add filters, deduplication, timestamps, and TXT/CSV export.
