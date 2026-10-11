@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private static final int VPN_PERMISSION_REQUEST = 700;
     private boolean darkMode;
     private boolean includeSystemApps;
+    private String currentScreen = "apps";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +58,18 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (intent.getBooleanExtra("open_dns_history", false)) showDomainPicker();
+    }
+
+    @Override
+    public void onBackPressed() {
+        // Handle Android system back, including edge-swipe gestures, as in-app navigation.
+        if ("details".equals(currentScreen)) {
+            showDomainPicker();
+        } else if ("history".equals(currentScreen) || "traffic".equals(currentScreen)) {
+            showAppPicker();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     private void setupRoot() {
@@ -79,6 +92,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAppPicker() {
+        currentScreen = "apps";
         setupRoot();
         title("NetScope");
         TextView version = text("NETWORK INSPECTOR  ·  v" + BuildConfig.VERSION_NAME, 11);
@@ -211,20 +225,11 @@ public class MainActivity extends Activity {
         });
         root.addView(continueButton, marginParams(0, 16, 0, 0));
 
-        Button startDns = button("Start DNS observation for selected apps");
-        startDns.setOnClickListener(v -> requestDnsStart());
-        root.addView(startDns, marginParams(0, 8, 0, 0));
-
-        Button stopDns = button("Stop DNS observation");
-        stopDns.setOnClickListener(v -> stopDnsCapture());
-        root.addView(stopDns, marginParams(0, 4, 0, 0));
-
-        Button history = button("View observed DNS history");
-        history.setOnClickListener(v -> showDomainPicker());
-        root.addView(history, marginParams(0, 4, 0, 0));
+        // DNS controls are kept in the status card above the long app list.
     }
 
     private void showDomainPicker() {
+        currentScreen = "history";
         setupRoot();
         title("Observed DNS history");
         subtitle(selectedAppLabel + " · Locally stored DNS observations");
@@ -429,6 +434,7 @@ public class MainActivity extends Activity {
     }
 
     private void showDomainDetails(String domain) {
+        currentScreen = "details";
         JSONObject found = null;
         String json = getSharedPreferences("netscope_capture", MODE_PRIVATE).getString("dns_history", "[]");
         try {
@@ -499,13 +505,25 @@ public class MainActivity extends Activity {
         Button refresh = button("Refresh capture status");
         refresh.setOnClickListener(v -> showAppPicker());
         status.addView(refresh, marginParams(0, 10, 0, 0));
-        Button view = button("Open domain history");
+        Button toggleCapture = button(active ? "Stop DNS observation" : "Start DNS observation for selected apps");
+        toggleCapture.setOnClickListener(v -> {
+            if (getSharedPreferences("netscope_capture", MODE_PRIVATE).getBoolean("capture_active", false)) {
+                stopDnsCapture();
+                showAppPicker();
+            } else {
+                requestDnsStart();
+            }
+        });
+        status.addView(toggleCapture, marginParams(0, 10, 0, 0));
+
+        Button view = button("View observed DNS history");
         view.setOnClickListener(v -> showDomainPicker());
         status.addView(view, marginParams(0, 6, 0, 0));
         root.addView(status, marginParams(0, 0, 0, 16));
     }
 
     private void showTrafficStats() {
+        currentScreen = "traffic";
         setupRoot();
         title("Per-app traffic");
         subtitle("Received and sent bytes since the device booted, where Android exposes per-app counters.");
