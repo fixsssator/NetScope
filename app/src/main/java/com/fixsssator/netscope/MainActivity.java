@@ -145,7 +145,8 @@ public class MainActivity extends Activity {
 
         all.setOnClickListener(v -> {
             for (CheckBox check : appChecks) {
-                if (check.getVisibility() == View.VISIBLE) check.setChecked(true);
+                if (check.getParent() instanceof View
+                        && ((View) check.getParent()).getVisibility() == View.VISIBLE) check.setChecked(true);
             }
         });
         none.setOnClickListener(v -> {
@@ -504,10 +505,18 @@ public class MainActivity extends Activity {
             }
             String rxText = rx < 0 ? "Unavailable" : formatBytes(rx);
             String txText = tx < 0 ? "Unavailable" : formatBytes(tx);
+            LinearLayout statRow = row();
+            statRow.setPadding(dp(8), dp(8), dp(8), dp(8));
+            ImageView icon = new ImageView(this);
+            try { icon.setImageDrawable(pm.getApplicationIcon(info)); }
+            catch (RuntimeException ignored) { icon.setImageResource(android.R.drawable.sym_def_app_icon); }
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(38), dp(38));
+            iconParams.setMargins(0, 0, dp(10), 0);
+            statRow.addView(icon, iconParams);
             TextView item = text(label + "\\n" + info.packageName
-                    + "\\nReceived: " + rxText + " · Sent: " + txText, 14);
-            item.setPadding(dp(4), dp(8), dp(4), dp(8));
-            list.addView(item, matchParams());
+                    + "\\nReceived: " + rxText + " · Sent: " + txText, 13);
+            statRow.addView(item, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            list.addView(statRow, matchParams());
             View divider = new View(this);
             divider.setBackgroundColor(0xFFE0E0E0);
             list.addView(divider, new LinearLayout.LayoutParams(
