@@ -268,6 +268,7 @@ public class MainActivity extends Activity {
                 CheckBox check = new CheckBox(this);
                 check.setText(domain);
                 check.setTextSize(15);
+                check.setTextColor(colorText());
                 check.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                 check.setTag(domain);
                 item.addView(check, matchParams());
@@ -642,7 +643,7 @@ public class MainActivity extends Activity {
     private int colorMuted() { return darkMode ? 0xFFA4AEC2 : 0xFF65708A; }
     private int colorBorder() { return darkMode ? 0xFF30394B : 0xFFE4E9F2; }
     private int colorDivider() { return darkMode ? 0xFF30394B : 0xFFE6EAF2; }
-    private int colorPrimary() { return darkMode ? 0xFF7C9BFF : 0xFF3659D9; }
+    private int colorPrimary() { return darkMode ? 0xFF4769D8 : 0xFF3659D9; }
 
     private LinearLayout card() {
         LinearLayout card = new LinearLayout(this);
