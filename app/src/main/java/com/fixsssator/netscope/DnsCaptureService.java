@@ -42,6 +42,7 @@ public class DnsCaptureService extends VpnService {
     private ParcelFileDescriptor vpn;
     private Thread worker;
     private volatile boolean running;
+    private volatile int capturedCount;
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
@@ -65,8 +66,10 @@ public class DnsCaptureService extends VpnService {
             vpn = builder.establish();
             if (vpn == null) { stopSelf(); return START_NOT_STICKY; }
             createChannel();
-            startForeground(NOTIFICATION_ID, notification());
             running = true;
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("capture_active", true).putInt("capture_count", 0).apply();
+            capturedCount = 0;
+            startForeground(NOTIFICATION_ID, notification());
             worker = new Thread(this::captureLoop, "NetScope-DNS");
             worker.start();
         } catch (Exception e) {
@@ -86,8 +89,14 @@ public class DnsCaptureService extends VpnService {
                 Packet p = parse(buffer, length);
                 if (p == null) continue;
                 String domain = questionName(p.dns);
-                if (domain != null) save(domain);
                 byte[] response = forward(p.dns);
+                if (domain != null) {
+                    List<String> ips = response == null ? new ArrayList<>() : answerIps(response);
+                    save(domain, ips);
+                    capturedCount++;
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt("capture_count", capturedCount).apply();
+                    getSystemService(NotificationManager.class).notify(NOTIFICATION_ID, notification());
+                }
                 if (response != null) {
                     byte[] reply = responsePacket(buffer, p, response);
                     if (reply != null) output.write(reply);
@@ -168,7 +177,52 @@ public class DnsCaptureService extends VpnService {
         return name.toString().toLowerCase(Locale.ROOT);
     }
 
-    private void save(String domain) {
+    private List<String> answerIps(byte[] dns) {
+        ArrayList<String> ips = new ArrayList<>();
+        if (dns.length < 12 || u16(dns, 6) == 0) return ips;
+        int offset = 12;
+        while (offset < dns.length) {
+            int size = dns[offset++] & 255;
+            if (size == 0) break;
+            if ((size & 0xC0) != 0 || size > 63 || offset + size > dns.length) return ips;
+            offset += size;
+        }
+        offset += 4;
+        if (offset > dns.length) return ips;
+        int answers = Math.min(u16(dns, 6), 128);
+        for (int i = 0; i < answers; i++) {
+            if (offset + 12 > dns.length) break;
+            int first = dns[offset] & 255;
+            if ((first & 0xC0) == 0xC0) offset += 2;
+            else {
+                while (offset < dns.length) {
+                    int n = dns[offset++] & 255;
+                    if (n == 0) break;
+                    if ((n & 0xC0) != 0 || n > 63 || offset + n > dns.length) return ips;
+                    offset += n;
+                }
+            }
+            if (offset + 10 > dns.length) break;
+            int type = u16(dns, offset), clazz = u16(dns, offset + 2), rdlength = u16(dns, offset + 8);
+            offset += 10;
+            if (offset + rdlength > dns.length) break;
+            if (clazz == 1 && type == 1 && rdlength == 4) {
+                String ip = (dns[offset] & 255) + "." + (dns[offset+1] & 255) + "." + (dns[offset+2] & 255) + "." + (dns[offset+3] & 255);
+                if (!ips.contains(ip)) ips.add(ip);
+            } else if (clazz == 1 && type == 28 && rdlength == 16) {
+                StringBuilder ip = new StringBuilder();
+                for (int j = 0; j < 16; j += 2) {
+                    if (j > 0) ip.append(':');
+                    ip.append(Integer.toHexString(((dns[offset+j] & 255) << 8) | (dns[offset+j+1] & 255)));
+                }
+                if (!ips.contains(ip.toString())) ips.add(ip.toString());
+            }
+            offset += rdlength;
+        }
+        return ips;
+    }
+
+    private void save(String domain, List<String> ips) {
         synchronized (DnsCaptureService.class) {
             android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
             JSONArray old;
@@ -179,6 +233,7 @@ public class DnsCaptureService extends VpnService {
                 for (int i = Math.max(0, old.length() - 498); i < old.length(); i++) next.put(old.get(i));
                 JSONObject event = new JSONObject();
                 event.put("domain", domain);
+                event.put("ips", new JSONArray(ips));
                 event.put("timestamp", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(new Date()));
                 next.put(event);
                 prefs.edit().putString(HISTORY, next.toString()).apply();
@@ -208,15 +263,22 @@ public class DnsCaptureService extends VpnService {
     }
     private Notification notification() {
         Intent stop = new Intent(this, DnsCaptureService.class); stop.setAction(ACTION_STOP);
-        PendingIntent pending = PendingIntent.getService(this, 42, stop, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent stopPending = PendingIntent.getService(this, 42, stop, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent open = new Intent(this, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        open.putExtra("open_dns_history", true);
+        PendingIntent openPending = PendingIntent.getActivity(this, 43, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
-        return builder.setContentTitle("NetScope is observing DNS")
-                .setContentText("Selected apps only · use Stop to end the session")
-                .setSmallIcon(android.R.drawable.stat_sys_warning).setOngoing(true)
-                .addAction(android.R.drawable.ic_media_pause, "Stop", pending).build();
+        String details = capturedCount + (capturedCount == 1 ? " DNS query captured" : " DNS queries captured");
+        return builder.setContentTitle("● NetScope · DNS capture ACTIVE")
+                .setContentText(details + " · Tap to open domain history")
+                .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+                .setContentIntent(openPending).setOngoing(true).setOnlyAlertOnce(true)
+                .addAction(android.R.drawable.ic_media_pause, "Stop capture", stopPending).build();
     }
     private void stopCapture() {
         running = false;
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("capture_active", false).apply();
         if (worker != null) worker.interrupt();
         if (vpn != null) { try { vpn.close(); } catch (IOException ignored) { } vpn = null; }
         stopForeground(true);
