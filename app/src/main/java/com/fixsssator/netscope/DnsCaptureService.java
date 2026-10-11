@@ -121,7 +121,8 @@ public class DnsCaptureService extends VpnService {
             if (!protect(socket)) return null;
             socket.setSoTimeout(2500);
             InetAddress upstream = InetAddress.getByName(UPSTREAM);
-            socket.send(new DatagramPacket(query, query.length, new InetSocketAddress(upstream, 53)));
+            socket.connect(upstream, 53);
+            socket.send(new DatagramPacket(query, query.length));
             byte[] buf = new byte[4096];
             DatagramPacket response = new DatagramPacket(buf, buf.length);
             socket.receive(response);
