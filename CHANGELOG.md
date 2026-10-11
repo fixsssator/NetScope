@@ -1,26 +1,21 @@
 # Changelog
 
-All notable changes to NetScope are documented here.
-
-## [0.2.0] - 2026-10-11
-
+## [0.3.0] - 2026-10-11
 ### Added
-- Per-app received and sent byte counters using Android UID traffic statistics.
-- Refresh action and traffic-volume sorting on the statistics screen.
-- Version metadata managed centrally through Gradle properties.
-- Tag-based GitHub Actions release workflow for versioned APK releases.
-
-### Fixed
-- Android SDK setup in GitHub Actions now uses the runner's preinstalled SDK paths.
+- Initial local VPN-based IPv4 UDP DNS observation for selected apps.
+- Persistent notification with a Stop action.
+- On-device domain history with timestamps.
 
 ### Limitations
-- Live DNS observation and packet capture are not implemented.
-- Domain list entries remain sample data.
-- UID byte counters do not identify destination domains and may be unavailable for some apps/devices.
+- DNS-over-TLS, DNS-over-HTTPS, IPv6 DNS, hard-coded resolvers, and other bypass paths may not be observed.
+- DNS queries are forwarded to Cloudflare DNS (1.1.1.1).
+- DNS observations are not attributed to individual apps.
+- VPN/DNS behavior varies by Android version and device; stop the session if connectivity is affected.
 
-## [0.1.0] - Initial scaffold
+## [0.2.0] - 2026-10-11
+- Added per-app RX/TX counters, centralized versioning, and tagged GitHub Releases.
+- Fixed BuildConfig generation.
+- Domain entries were sample data; live DNS observation was not implemented.
 
-- Installed-app picker and search.
-- Selectable sample domain/IP list.
-- Copy selected addresses to clipboard.
-- Initial Android CI workflow.
+## [0.1.0]
+- Initial Android app scaffold.
