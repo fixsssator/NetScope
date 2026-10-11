@@ -194,19 +194,39 @@ public class MainActivity extends Activity {
         root.addView(list, matchParams());
         domainChecks.clear();
 
-        LinkedHashMap<String, String> domains = loadObservedDomains();
+        LinkedHashMap<String, JSONObject> domains = loadObservedDomains();
         if (domains.isEmpty()) {
-            TextView empty = text("No DNS queries recorded yet. Return to app selection and start an observation session.", 14);
-            empty.setTextColor(0xFF60646C);
+            LinearLayout empty = card();
+            TextView message = text("Nothing captured yet", 17);
+            message.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            empty.addView(message, matchParams());
+            TextView hint = text("Start a session from the home screen. New DNS lookups will appear here.", 13);
+            hint.setTextColor(0xFF65708A);
+            empty.addView(hint, marginParams(0, 6, 0, 0));
             list.addView(empty, marginParams(0, 8, 0, 8));
         } else {
             for (String domain : domains.keySet()) {
+                JSONObject event = domains.get(domain);
+                LinearLayout item = card();
                 CheckBox check = new CheckBox(this);
-                check.setText(domain + "\\nLast seen: " + domains.get(domain));
+                check.setText(domain);
                 check.setTextSize(15);
+                check.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                 check.setTag(domain);
-                list.addView(check, matchParams());
+                item.addView(check, matchParams());
                 domainChecks.add(check);
+                String ipText = formatIps(event.optJSONArray("ips"));
+                TextView metadata = text((ipText.isEmpty() ? "No IP address in response" : ipText)
+                        + "\\nLast seen  " + event.optString("timestamp", "Unknown"), 12);
+                metadata.setTextColor(0xFF65708A);
+                metadata.setPadding(dp(36), 0, dp(4), dp(4));
+                item.addView(metadata, matchParams());
+                TextView details = text("View details  →", 13);
+                details.setTextColor(0xFF3659D9);
+                details.setPadding(dp(36), dp(8), dp(4), dp(4));
+                details.setOnClickListener(v -> showDomainDetails(domain));
+                item.addView(details, matchParams());
+                list.addView(item, marginParams(0, 0, 0, 10));
             }
         }
 
