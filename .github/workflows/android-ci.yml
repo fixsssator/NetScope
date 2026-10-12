@@ -42,7 +42,7 @@ jobs:
         run: gradle assembleDebug
 
       - name: Name APK with version
-        run: cp app/build/outputs/apk/debug/app-debug.apk "NetScope-$(grep '^appVersionName=' gradle.properties | cut -d= -f2)-debug.apk"
+        run: cp app/build/outputs/apk/debug/NetScope-*-debug.apk .
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
