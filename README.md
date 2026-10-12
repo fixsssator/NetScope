@@ -1,64 +1,99 @@
 # NetScope
 
-NetScope is an Android networking utility project built in Java for the CS50 final project.
+**NetScope is a free, open-source HTTP(S) debugging proxy for Android** - a small, fully free take on
+[Reqable](https://github.com/reqable/reqable-app) (Fiddler + Charles + Postman in one app).
+It is written in Java as my [CS50](https://cs50.harvard.edu/) final project.
 
-The goal is to help users choose which installed apps they want to inspect, review observed domains and IP addresses, select individual entries, and copy only the selected values.
+Everything is free: no ads, no accounts, no subscription, no cloud. Captured traffic never leaves the device.
 
-## Versioning
+## Features
 
-The current app version is **0.2.0** (`versionCode` 2). The version is defined in `gradle.properties` as `appVersionName` and `appVersionCode`; `app/build.gradle` reads those values. Follow semantic versioning for `appVersionName` and always increase `appVersionCode` for a new Android build. Pushing a tag such as `v0.2.0` triggers a tagged build and publishes the versioned debug APK as a GitHub Release.
+| Area | What NetScope does |
+| --- | --- |
+| Capture | Local proxy on `127.0.0.1:8899`, registered as the system proxy through a VPN network (Android 10+) |
+| Protocols | HTTP/1.x, HTTPS (TLS interception), WebSocket upgrade (relayed), CONNECT tunnels |
+| Viewer | Headers, JSON pretty-print, form decoding, gzip/deflate decoding, hex dump for binary bodies |
+| Traffic source | Shows which app produced each request |
+| Search / filter | Free text over method, host, path, status and app; `2xx` / `3xx` / `4xx` / `5xx` quick filters |
+| Composer | Build and send requests (GET/POST/PUT/PATCH/DELETE/...), or replay a captured one |
+| Rules | Block, map local, map remote, rewrite request/response headers |
+| Export | HAR 1.2 (opens in Chrome DevTools, Reqable, Charles), copy as cURL, share as text |
+| Privacy | No network access except the traffic you proxy; the CA key is generated on-device and stays there |
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+## How it works
 
-## Current status
+```
+ app / browser ──► system HTTP proxy (127.0.0.1:8899) ──► ProxyServer ──► ProxyConnection ──► the Internet
+                        ▲                                      │
+        VpnService.setHttpProxy()                              ├─ TLS interception (CertManager signs a leaf cert per host)
+        (no packets are routed through the tunnel)             ├─ RuleEngine (block / map / rewrite)
+                                                               └─ TrafficStore ──► UI (list, details, HAR, cURL)
+```
 
-This repository contains the initial Android app scaffold:
-- English UI
-- Installed-app selection with checkboxes
-- Select all / clear selection
-- Per-app received/sent byte counters since device boot (when Android exposes UID counters)
-- A selectable domain list
-- Copy selected domains to the clipboard
-- GitHub Actions build workflow
+* **`vpn/NetScopeVpnService`** creates a VPN network whose only job is to publish the HTTP proxy setting. NetScope itself
+  is excluded from that VPN so its upstream connections do not loop back into the proxy.
+* **`proxy/ProxyServer` + `ProxyConnection`** parse HTTP/1.1 by hand, handle `CONNECT`, decrypt TLS with a certificate
+  minted for the requested host, apply rules, forward the request on a fresh upstream connection (`Connection: close`),
+  and stream the response back while keeping up to 2 MB per body for the UI.
+* **`proxy/CertManager`** (BouncyCastle) creates a local CA (RSA-2048, 10 years) and one RSA key reused for all leaf
+  certificates (valid 300 days, SAN + serverAuth, so Chrome accepts them).
+* **`proxy/AppResolver`** uses `ConnectivityManager#getConnectionOwnerUid` to map a connection to an app.
+* **`data/TrafficStore`** is a thread-safe in-memory ring buffer (3000 entries) with throttled UI notifications.
+* **`rules/RuleEngine`** persists rules in `SharedPreferences` as JSON.
 
-**Important:** live packet capture, per-app attribution of individual connections, and real domain discovery are not implemented yet. The traffic statistics screen displays Android's per-UID byte counters where available; these counters do not identify domains and may be unavailable on some devices. The domain screen currently uses clearly labelled sample entries so the selection and copy workflow can be tested without pretending that sample data is captured traffic.
+## Using it
+
+1. Install the APK (see the Releases page or build it yourself).
+2. Open NetScope, tap the banner (or *Certificate* in the menu) and save the CA to Downloads.
+3. Install it: *Settings → Security → Encryption & credentials → Install a certificate → CA certificate*
+   (the exact path differs per vendor).
+4. Tap **▶**, accept the VPN prompt, and use a browser or any app that honours the system proxy.
+
+## Limitations (please read)
+
+* **Only apps that respect the system proxy are captured.** Chrome, WebView apps, OkHttp/HttpURLConnection apps do.
+  Apps that open raw sockets, use QUIC/HTTP3 or ignore the proxy do not. A full packet-level VPN is future work.
+* **User-installed CAs are not trusted by every app** (Android 7+ opt-in) and **certificate-pinned apps** reject the
+  NetScope certificate. NetScope detects the failed handshake and tunnels that host untouched from then on.
+* Upstream connections use **HTTP/1.1**. Clients that offer HTTP/2 are served HTTP/1.1, and `Accept-Encoding` is reduced
+  to `gzip, deflate` so bodies can be displayed (Brotli is not decoded).
+* Request bodies are buffered in memory (max 64 MB); only the first 2 MB of each body is kept for display.
+* WebSocket frames are relayed but not recorded.
+* Requires **Android 10+ (API 29)**.
+* The VPN trick needs on-device verification per device/ROM. If an app's traffic does not show up, check that the app
+  honours the system proxy.
 
 ## Build
 
-Requirements:
-- JDK 17
-- Gradle 8.11.1
-- Android SDK (platform 35)
+Requirements: JDK 17, Gradle 8.11.1, Android SDK platform 35.
 
-From the repository root:
-
-```bash
+```
 gradle assembleDebug
 ```
 
-The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`. CI also uploads a version-named APK artifact. Pushing a `v*` tag creates a GitHub Release with the APK attached.
+The APK is written to `app/build/outputs/apk/debug/NetScope-<version>-debug.apk`.
+Pushing a tag such as `v0.3.0` makes GitHub Actions build the APK and attach it to a GitHub Release.
 
-You can also run the **Android CI** workflow from the Actions tab. Successful builds upload the debug APK as a workflow artifact.
+## Versioning
 
-## Install in Android Studio
+`appVersionName` / `appVersionCode` live in `gradle.properties`. Follow semantic versioning and always increase
+`appVersionCode` for a new build. See [CHANGELOG.md](CHANGELOG.md).
 
-1. Clone or download this repository.
-2. Open the project directory in Android Studio.
-3. Allow Gradle to sync and install the required Android SDK platform.
-4. Run the `app` configuration on an emulator or device.
+## Design decisions (CS50)
 
-## Planned work
+* **Java + plain Android views** - keeps the code easy to read and grade; the only third-party libraries are Material,
+  RecyclerView and BouncyCastle (needed to create X.509 certificates).
+* **`setHttpProxy` instead of a user-space TCP/IP stack** - a packet-level VPN needs thousands of lines to be correct;
+  the proxy approach gives a working, auditable tool and is the same model desktop proxies use.
+* **One upstream connection per request** - slower than connection pooling, but removes a whole class of framing bugs
+  and keeps the code short.
+* **Rules as flat JSON** - small, human-readable, no database needed.
 
-1. Implement local VPN-based DNS observation with safe packet handling and without silently breaking device connectivity.
-2. Investigate reliable per-app attribution and Android-version limitations.
-3. Store capture sessions and observations locally.
-4. Add filters, deduplication, timestamps, and TXT/CSV export.
-5. Add tests and document capture limitations.
+## Security & legal
 
-## Privacy
-
-The initial version does not send captured data to a remote server. Live capture is not implemented in this scaffold. App visibility is requested only to populate the installed-app picker.
+Only inspect traffic of devices and apps you own or are allowed to test. Treat the generated CA like a password:
+remove it from the Android credential store when you no longer need it.
 
 ## License
 
-No license has been selected yet.
+[MIT](LICENSE)

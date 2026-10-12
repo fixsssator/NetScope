@@ -1,26 +1,21 @@
 # Changelog
 
-All notable changes to NetScope are documented here.
+## 0.3.0
 
-## [0.2.0] - 2026-10-11
+Complete rewrite: NetScope is now a free, open-source HTTP(S) debugging proxy for Android in the spirit of
+Reqable / Charles / HTTP Toolkit.
 
-### Added
-- Per-app received and sent byte counters using Android UID traffic statistics.
-- Refresh action and traffic-volume sorting on the statistics screen.
-- Version metadata managed centrally through Gradle properties.
-- Tag-based GitHub Actions release workflow for versioned APK releases.
+- Local MITM proxy (HTTP/1.1, HTTPS via on-device CA, WebSocket upgrade passthrough, CONNECT tunnels)
+- System-wide capture through a VPN network that only registers the proxy (`VpnService.Builder#setHttpProxy`)
+- Traffic list with live updates, text filter and status-class filter (`2xx`, `4xx`, `5xx`)
+- Request/response viewer: headers, pretty-printed JSON, form decoding, gzip/deflate decoding, hex view for binary
+- Traffic source: shows which app made each request
+- Composer (API tester) and one-tap replay of captured requests
+- Rules: block, map local, map remote, request/response header rewrite
+- Export HAR 1.2 and copy as cURL
+- Per-device certificate authority; hosts that reject it (pinning) are tunnelled automatically
+- MIT license, no ads, no accounts, no paid tier
 
-### Fixed
-- Android SDK setup in GitHub Actions now uses the runner's preinstalled SDK paths.
+## 0.2.0
 
-### Limitations
-- Live DNS observation and packet capture are not implemented.
-- Domain list entries remain sample data.
-- UID byte counters do not identify destination domains and may be unavailable for some apps/devices.
-
-## [0.1.0] - Initial scaffold
-
-- Installed-app picker and search.
-- Selectable sample domain/IP list.
-- Copy selected addresses to clipboard.
-- Initial Android CI workflow.
+- Initial Android scaffold: installed-app picker, per-UID byte counters, sample domain list
