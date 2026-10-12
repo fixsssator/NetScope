@@ -2,6 +2,8 @@ package com.fixsssator.netscope.ui;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.net.VpnService;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -37,6 +39,9 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Comparator;
 
 public class MainActivity extends AppCompatActivity implements TrafficStore.Listener {
     private final TrafficStore store = TrafficStore.get();
@@ -264,6 +269,8 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
             startActivity(new Intent(this, ComposeActivity.class));
         } else if (id == R.id.action_rules) {
             startActivity(new Intent(this, RulesActivity.class));
+        } else if (id == R.id.action_apps) {
+            showAppSelectionDialog();
         } else if (id == R.id.action_mitm) {
             boolean on = !item.isChecked();
             item.setChecked(on);
@@ -281,6 +288,80 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
             return super.onOptionsItemSelected(item);
         }
         return true;
+    }
+
+
+    /**
+     * Reqable-style per-app capture selector. An empty selection means capture
+     * apps globally; otherwise only selected packages are included in the VPN network.
+     */
+    private void showAppSelectionDialog() {
+        PackageManager pm = getPackageManager();
+        List<ApplicationInfo> apps = new ArrayList<>();
+        try {
+            apps.addAll(pm.getInstalledApplications(PackageManager.GET_META_DATA));
+        } catch (RuntimeException e) {
+            toast("Could not list installed apps: " + e.getMessage());
+            return;
+        }
+        apps.removeIf(info -> getPackageName().equals(info.packageName));
+        apps.sort((a, b) -> {
+            String an = String.valueOf(pm.getApplicationLabel(a));
+            String bn = String.valueOf(pm.getApplicationLabel(b));
+            return an.compareToIgnoreCase(bn);
+        });
+
+        String[] labels = new String[apps.size()];
+        boolean[] checked = new boolean[apps.size()];
+        Set<String> saved = getSharedPreferences("netscope", Context.MODE_PRIVATE)
+                .getStringSet("capture_packages", Collections.emptySet());
+        Set<String> selected = new HashSet<>(saved);
+        for (int i = 0; i < apps.size(); i++) {
+            ApplicationInfo info = apps.get(i);
+            String label = String.valueOf(pm.getApplicationLabel(info));
+            labels[i] = label + "\\n" + info.packageName;
+            checked[i] = selected.contains(info.packageName);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Apps to capture")
+                .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> {
+                    String pkg = apps.get(which).packageName;
+                    if (isChecked) selected.add(pkg);
+                    else selected.remove(pkg);
+                })
+                .setNeutralButton("Capture all", (dialog, which) -> {
+                    getSharedPreferences("netscope", Context.MODE_PRIVATE).edit()
+                            .putStringSet("capture_packages", new HashSet<>()).apply();
+                    applyCaptureAppSelection();
+                })
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    getSharedPreferences("netscope", Context.MODE_PRIVATE).edit()
+                            .putStringSet("capture_packages", new HashSet<>(selected)).apply();
+                    applyCaptureAppSelection();
+                })
+                .setOnCancelListener(dialog -> {})
+                .show();
+    }
+
+    private void applyCaptureAppSelection() {
+        Set<String> selected = getSharedPreferences("netscope", Context.MODE_PRIVATE)
+                .getStringSet("capture_packages", Collections.emptySet());
+        if (NetScopeVpnService.isRunning()) {
+            // Re-establish the VPN with the updated allow-list.
+            startService(new Intent(this, NetScopeVpnService.class)
+                    .setAction(NetScopeVpnService.ACTION_RESTART));
+            toast(selected.isEmpty()
+                    ? "Capture all apps selected. Reconfiguring capture…"
+                    : "Capture restricted to " + selected.size() + " app(s). Reconfiguring…");
+        } else {
+            toast(selected.isEmpty()
+                    ? "Capture all apps selected."
+                    : "Capture restricted to " + selected.size() + " app(s).");
+        }
+        invalidateOptionsMenu();
+        refresh();
     }
 
     private void exportHar() {
