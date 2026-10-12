@@ -9,6 +9,11 @@ android {
     namespace 'com.fixsssator.netscope'
     compileSdk 35
 
+    // MainActivity uses BuildConfig.VERSION_NAME; keep BuildConfig generation enabled.
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId 'com.fixsssator.netscope'
         // minSdk 29: VpnService.Builder#setHttpProxy and ConnectivityManager#getConnectionOwnerUid need API 29.
