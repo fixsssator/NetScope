@@ -2,6 +2,10 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_apps"
+        android:title="Apps to capture"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_compose"
         android:title="Composer"
         app:showAsAction="never" />
@@ -21,10 +25,6 @@
     <item
         android:id="@+id/action_har"
         android:title="Export HAR"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/action_apps"
-        android:title="Apps to capture"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_clear"

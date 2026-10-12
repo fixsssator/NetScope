@@ -7,23 +7,26 @@ import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
+import com.fixsssator.netscope.data.AppFilter;
 import com.fixsssator.netscope.data.TrafficStore;
 import com.fixsssator.netscope.proxy.CertManager;
+import com.fixsssator.netscope.proxy.ProxyControl;
 import com.fixsssator.netscope.proxy.ProxyServer;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Set;
 
 /**
  * Starts the local proxy and registers it as the system HTTP proxy through a VPN network
  * (VpnService.Builder#setHttpProxy, Android 10+). No packets are routed through the tunnel:
  * apps that honour the system proxy send their traffic to 127.0.0.1.
+ *
+ * The VPN's app list decides whose traffic is captured (see {@link AppFilter}).
+ * NetScope itself is never part of the VPN, so its own upstream connections do not loop back.
  */
 public class NetScopeVpnService extends VpnService {
     public static final String ACTION_START = "com.fixsssator.netscope.START";
     public static final String ACTION_STOP = "com.fixsssator.netscope.STOP";
-    public static final String ACTION_RESTART = "com.fixsssator.netscope.RESTART";
     public static final int PORT = 8899;
 
     private static final String TAG = "NetScopeVpn";
@@ -44,19 +47,16 @@ public class NetScopeVpnService extends VpnService {
             stopSelf();
             return START_NOT_STICKY;
         }
-        if (ACTION_RESTART.equals(action)) {
-            stopAll();
-            startAll();
-            return START_NOT_STICKY;
-        }
-        if (!running) startAll();
+        // START while already running = restart, so a changed app selection takes effect.
+        if (running) stopAll();
+        startAll();
         return START_NOT_STICKY;
     }
 
     private void startAll() {
         try {
             CertManager.get(this).ensure();
-            com.fixsssator.netscope.proxy.ProxyControl.resetBypass();
+            ProxyControl.resetBypass();
 
             proxy = new ProxyServer(getApplicationContext(), PORT);
             proxy.start();
@@ -65,22 +65,8 @@ public class NetScopeVpnService extends VpnService {
                     .setSession("NetScope")
                     .addAddress("10.77.0.1", 32)
                     .setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", PORT));
-
-            Set<String> selected = getSharedPreferences("netscope", MODE_PRIVATE)
-                    .getStringSet("capture_packages", Collections.emptySet());
-            if (selected != null && !selected.isEmpty()) {
-                for (String packageName : selected) {
-                    try {
-                        b.addAllowedApplication(packageName);
-                    } catch (PackageManager.NameNotFoundException e) {
-                        Log.w(TAG, "Selected app is no longer installed: " + packageName);
-                    }
-                }
-            } else {
-                b.addDisallowedApplication(getPackageName());
-            }
-
             b.allowBypass();
+            applyAppFilter(b);
             tun = b.establish();
             if (tun == null) throw new IllegalStateException("VPN permission was not granted");
             running = true;
@@ -90,6 +76,39 @@ public class NetScopeVpnService extends VpnService {
             stopSelf();
         }
         TrafficStore.get().changed();
+    }
+
+    /** Android allows either an allow-list or a disallow-list, never both. */
+    private void applyAppFilter(Builder b) throws PackageManager.NameNotFoundException {
+        AppFilter.Mode mode = AppFilter.mode(this);
+        Set<String> selected = AppFilter.selected(this);
+        String self = getPackageName();
+
+        if (mode == AppFilter.Mode.ONLY && !selected.isEmpty()) {
+            int allowed = 0;
+            for (String pkg : selected) {
+                if (pkg.equals(self)) continue;
+                try {
+                    b.addAllowedApplication(pkg);
+                    allowed++;
+                } catch (PackageManager.NameNotFoundException ignored) {
+                    // app was uninstalled since it was selected
+                }
+            }
+            if (allowed > 0) return; // NetScope is not on the allow-list, so it is outside the VPN
+        }
+
+        b.addDisallowedApplication(self);
+        if (mode == AppFilter.Mode.EXCLUDE) {
+            for (String pkg : selected) {
+                if (pkg.equals(self)) continue;
+                try {
+                    b.addDisallowedApplication(pkg);
+                } catch (PackageManager.NameNotFoundException ignored) {
+                    // app was uninstalled since it was selected
+                }
+            }
+        }
     }
 
     private void stopAll() {

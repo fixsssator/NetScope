@@ -9,6 +9,7 @@ Reqable / Charles / HTTP Toolkit.
 - System-wide capture through a VPN network that only registers the proxy (`VpnService.Builder#setHttpProxy`)
 - Traffic list with live updates, text filter and status-class filter (`2xx`, `4xx`, `5xx`)
 - Request/response viewer: headers, pretty-printed JSON, form decoding, gzip/deflate decoding, hex view for binary
+- App selection: capture all apps, only selected apps, or all except selected (searchable list, system apps optional); changing it restarts a running capture
 - Traffic source: shows which app made each request
 - Composer (API tester) and one-tap replay of captured requests
 - Rules: block, map local, map remote, request/response header rewrite

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_system"
+        android:checkable="true"
+        android:title="Show system apps"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_select_all"
+        android:title="Select all shown"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_clear_sel"
+        android:title="Clear selection"
+        app:showAsAction="never" />
+</menu>

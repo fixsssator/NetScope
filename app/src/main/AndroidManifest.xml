@@ -24,6 +24,7 @@
         <activity android:name=".ui.DetailActivity" android:exported="false" />
         <activity android:name=".ui.ComposeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.RulesActivity" android:exported="false" />
+        <activity android:name=".ui.AppPickerActivity" android:exported="false" />
 
         <service
             android:name=".vpn.NetScopeVpnService"

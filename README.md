@@ -13,6 +13,7 @@ Everything is free: no ads, no accounts, no subscription, no cloud. Captured tra
 | Capture | Local proxy on `127.0.0.1:8899`, registered as the system proxy through a VPN network (Android 10+) |
 | Protocols | HTTP/1.x, HTTPS (TLS interception), WebSocket upgrade (relayed), CONNECT tunnels |
 | Viewer | Headers, JSON pretty-print, form decoding, gzip/deflate decoding, hex dump for binary bodies |
+| App selection | Choose which apps are captured: all, only selected, or all except selected (like Reqable's app list) |
 | Traffic source | Shows which app produced each request |
 | Search / filter | Free text over method, host, path, status and app; `2xx` / `3xx` / `4xx` / `5xx` quick filters |
 | Composer | Build and send requests (GET/POST/PUT/PATCH/DELETE/...), or replay a captured one |
@@ -37,6 +38,8 @@ Everything is free: no ads, no accounts, no subscription, no cloud. Captured tra
   and stream the response back while keeping up to 2 MB per body for the UI.
 * **`proxy/CertManager`** (BouncyCastle) creates a local CA (RSA-2048, 10 years) and one RSA key reused for all leaf
   certificates (valid 300 days, SAN + serverAuth, so Chrome accepts them).
+* **`data/AppFilter` + `ui/AppPickerActivity`** store the app selection; the VPN service turns it into
+  `addAllowedApplication` / `addDisallowedApplication`, so only the chosen apps are routed to the proxy.
 * **`proxy/AppResolver`** uses `ConnectivityManager#getConnectionOwnerUid` to map a connection to an app.
 * **`data/TrafficStore`** is a thread-safe in-memory ring buffer (3000 entries) with throttled UI notifications.
 * **`rules/RuleEngine`** persists rules in `SharedPreferences` as JSON.

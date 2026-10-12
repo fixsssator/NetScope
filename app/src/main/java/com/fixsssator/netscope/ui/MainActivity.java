@@ -2,8 +2,6 @@ package com.fixsssator.netscope.ui;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
 import android.net.VpnService;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -13,10 +11,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.CheckBox;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.view.View;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -27,6 +21,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fixsssator.netscope.R;
+import com.fixsssator.netscope.data.AppFilter;
 import com.fixsssator.netscope.data.Exchange;
 import com.fixsssator.netscope.data.TrafficStore;
 import com.fixsssator.netscope.proxy.CertManager;
@@ -43,9 +38,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Comparator;
 
 public class MainActivity extends AppCompatActivity implements TrafficStore.Listener {
     private final TrafficStore store = TrafficStore.get();
@@ -59,6 +51,13 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     private final ActivityResultLauncher<Intent> vpnPermission = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == RESULT_OK) launchService();
+            });
+
+    private final ActivityResultLauncher<Intent> appPicker = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                // App selection changed while capturing: restart so the VPN picks up the new app list.
+                if (result.getResultCode() == RESULT_OK && NetScopeVpnService.isRunning()) launchService();
+                refresh();
             });
 
     @Override
@@ -167,8 +166,8 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
 
         toolbar.setTitle("NetScope");
         toolbar.setSubtitle(running
-                ? "Capturing · 127.0.0.1:" + NetScopeVpnService.PORT + " · " + all.size() + " requests"
-                : "Stopped · " + all.size() + " requests");
+                ? "Capturing " + AppFilter.summary(this) + " · " + all.size() + " requests"
+                : "Stopped · " + AppFilter.summary(this) + " · " + all.size() + " requests");
         empty.setText(running
                 ? "Waiting for traffic…\nOpen a browser or app that uses the system proxy."
                 : "No traffic yet.\nTap ▶ to start capturing.");
@@ -269,12 +268,12 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_compose) {
+        if (id == R.id.action_apps) {
+            appPicker.launch(new Intent(this, AppPickerActivity.class));
+        } else if (id == R.id.action_compose) {
             startActivity(new Intent(this, ComposeActivity.class));
         } else if (id == R.id.action_rules) {
             startActivity(new Intent(this, RulesActivity.class));
-        } else if (id == R.id.action_apps) {
-            showAppSelectionDialog();
         } else if (id == R.id.action_mitm) {
             boolean on = !item.isChecked();
             item.setChecked(on);
@@ -292,152 +291,6 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
             return super.onOptionsItemSelected(item);
         }
         return true;
-    }
-
-
-    /**
-     * Per-app capture selector with live search and a toggle to hide system apps.
-     */
-    private void showAppSelectionDialog() {
-        PackageManager pm = getPackageManager();
-        List<ApplicationInfo> apps = new ArrayList<>();
-        try {
-            apps.addAll(pm.getInstalledApplications(PackageManager.GET_META_DATA));
-        } catch (RuntimeException e) {
-            toast("Could not list installed apps: " + e.getMessage());
-            return;
-        }
-        apps.removeIf(info -> getPackageName().equals(info.packageName));
-        apps.sort((a, b) -> String.valueOf(pm.getApplicationLabel(a))
-                .compareToIgnoreCase(String.valueOf(pm.getApplicationLabel(b))));
-
-        Set<String> saved = getSharedPreferences("netscope", Context.MODE_PRIVATE)
-                .getStringSet("capture_packages", Collections.emptySet());
-        Set<String> selected = new HashSet<>(saved);
-        EditText filter = new EditText(this);
-        filter.setSingleLine(true);
-        filter.setHint("Search apps or package names");
-
-        CheckBox hideSystem = new CheckBox(this);
-        hideSystem.setText("Hide system apps");
-        hideSystem.setChecked(true);
-
-        TextView count = new TextView(this);
-        count.setPadding(0, dp(4), 0, dp(6));
-
-        LinearLayout appRows = new LinearLayout(this);
-        appRows.setOrientation(LinearLayout.VERTICAL);
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(appRows, new ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        scroll.setFillViewport(false);
-
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        int horizontal = dp(20);
-        content.setPadding(horizontal, dp(8), horizontal, 0);
-        content.addView(filter, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        content.addView(hideSystem, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        content.addView(count, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        content.addView(scroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(360)));
-
-        final Runnable[] render = new Runnable[1];
-        render[0] = () -> {
-            String query = filter.getText().toString().trim().toLowerCase(Locale.ROOT);
-            boolean hide = hideSystem.isChecked();
-            appRows.removeAllViews();
-            int visible = 0;
-            for (ApplicationInfo info : apps) {
-                boolean systemApp = (info.flags & (ApplicationInfo.FLAG_SYSTEM
-                        | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0;
-                if (hide && systemApp) continue;
-                String label = String.valueOf(pm.getApplicationLabel(info));
-                if (!query.isEmpty() && !label.toLowerCase(Locale.ROOT).contains(query)
-                        && !info.packageName.toLowerCase(Locale.ROOT).contains(query)) continue;
-
-                CheckBox row = new CheckBox(this);
-                row.setText(label + "\n" + info.packageName);
-                row.setTextSize(14);
-                row.setMinHeight(dp(52));
-                row.setPadding(0, dp(4), 0, dp(4));
-                row.setChecked(selected.contains(info.packageName));
-                row.setOnCheckedChangeListener((button, isChecked) -> {
-                    if (isChecked) selected.add(info.packageName);
-                    else selected.remove(info.packageName);
-                    count.setText(visibleCount(apps, hideSystem.isChecked(), filter.getText().toString())
-                            + " apps shown · " + selected.size() + " selected");
-                });
-                appRows.addView(row, new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-                visible++;
-            }
-            count.setText(visible + " apps shown · " + selected.size() + " selected");
-        };
-
-        filter.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { render[0].run(); }
-            @Override public void afterTextChanged(Editable s) {}
-        });
-        hideSystem.setOnCheckedChangeListener((button, checked) -> render[0].run());
-        render[0].run();
-
-        new AlertDialog.Builder(this)
-                .setTitle("Apps to capture")
-                .setView(content)
-                .setNeutralButton("Capture all", (dialog, which) -> {
-                    getSharedPreferences("netscope", Context.MODE_PRIVATE).edit()
-                            .putStringSet("capture_packages", new HashSet<>()).apply();
-                    applyCaptureAppSelection();
-                })
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    getSharedPreferences("netscope", Context.MODE_PRIVATE).edit()
-                            .putStringSet("capture_packages", new HashSet<>(selected)).apply();
-                    applyCaptureAppSelection();
-                })
-                .show();
-    }
-
-    private int visibleCount(List<ApplicationInfo> apps, boolean hideSystem, String queryText) {
-        String query = queryText == null ? "" : queryText.trim().toLowerCase(Locale.ROOT);
-        int count = 0;
-        PackageManager pm = getPackageManager();
-        for (ApplicationInfo info : apps) {
-            if (hideSystem && (info.flags & (ApplicationInfo.FLAG_SYSTEM
-                    | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0) continue;
-            String label = String.valueOf(pm.getApplicationLabel(info)).toLowerCase(Locale.ROOT);
-            if (query.isEmpty() || label.contains(query)
-                    || info.packageName.toLowerCase(Locale.ROOT).contains(query)) count++;
-        }
-        return count;
-    }
-
-    private int dp(int value) {
-        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
-    }
-
-    private void applyCaptureAppSelection() {
-        Set<String> selected = getSharedPreferences("netscope", Context.MODE_PRIVATE)
-                .getStringSet("capture_packages", Collections.emptySet());
-        if (NetScopeVpnService.isRunning()) {
-            // Re-establish the VPN with the updated allow-list.
-            startService(new Intent(this, NetScopeVpnService.class)
-                    .setAction(NetScopeVpnService.ACTION_RESTART));
-            toast(selected.isEmpty()
-                    ? "Capture all apps selected. Reconfiguring capture…"
-                    : "Capture restricted to " + selected.size() + " app(s). Reconfiguring…");
-        } else {
-            toast(selected.isEmpty()
-                    ? "Capture all apps selected."
-                    : "Capture restricted to " + selected.size() + " app(s).");
-        }
-        invalidateOptionsMenu();
-        refresh();
     }
 
     private void exportHar() {
