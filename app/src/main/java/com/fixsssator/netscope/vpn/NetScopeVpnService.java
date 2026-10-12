@@ -1,6 +1,7 @@
 package com.fixsssator.netscope.vpn;
 
-import android.content.Intent;\nimport android.content.pm.PackageManager;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.ProxyInfo;
 import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
@@ -11,12 +12,13 @@ import com.fixsssator.netscope.proxy.CertManager;
 import com.fixsssator.netscope.proxy.ProxyServer;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * Starts the local proxy and registers it as the system HTTP proxy through a VPN network
  * (VpnService.Builder#setHttpProxy, Android 10+). No packets are routed through the tunnel:
- * apps that honour the system proxy (browsers, OkHttp, HttpURLConnection, ...) send their traffic to 127.0.0.1.
- * NetScope itself is excluded so its own upstream connections do not loop back into the proxy.
+ * apps that honour the system proxy send their traffic to 127.0.0.1.
  */
 public class NetScopeVpnService extends VpnService {
     public static final String ACTION_START = "com.fixsssator.netscope.START";
@@ -42,6 +44,11 @@ public class NetScopeVpnService extends VpnService {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_RESTART.equals(action)) {
+            stopAll();
+            startAll();
+            return START_NOT_STICKY;
+        }
         if (!running) startAll();
         return START_NOT_STICKY;
     }
@@ -57,8 +64,22 @@ public class NetScopeVpnService extends VpnService {
             Builder b = new Builder()
                     .setSession("NetScope")
                     .addAddress("10.77.0.1", 32)
-                    .addDisallowedApplication(getPackageName())
                     .setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", PORT));
+
+            Set<String> selected = getSharedPreferences("netscope", MODE_PRIVATE)
+                    .getStringSet("capture_packages", Collections.emptySet());
+            if (selected != null && !selected.isEmpty()) {
+                for (String packageName : selected) {
+                    try {
+                        b.addAllowedApplication(packageName);
+                    } catch (PackageManager.NameNotFoundException e) {
+                        Log.w(TAG, "Selected app is no longer installed: " + packageName);
+                    }
+                }
+            } else {
+                b.addDisallowedApplication(getPackageName());
+            }
+
             b.allowBypass();
             tun = b.establish();
             if (tun == null) throw new IllegalStateException("VPN permission was not granted");
