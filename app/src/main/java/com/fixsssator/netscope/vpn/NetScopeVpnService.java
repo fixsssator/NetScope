@@ -1,6 +1,6 @@
 package com.fixsssator.netscope.vpn;
 
-import android.content.Intent;
+import android.content.Intent;\nimport android.content.pm.PackageManager;
 import android.net.ProxyInfo;
 import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
@@ -21,6 +21,7 @@ import java.io.IOException;
 public class NetScopeVpnService extends VpnService {
     public static final String ACTION_START = "com.fixsssator.netscope.START";
     public static final String ACTION_STOP = "com.fixsssator.netscope.STOP";
+    public static final String ACTION_RESTART = "com.fixsssator.netscope.RESTART";
     public static final int PORT = 8899;
 
     private static final String TAG = "NetScopeVpn";
