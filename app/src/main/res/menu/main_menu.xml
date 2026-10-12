@@ -2,6 +2,14 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_filters"
+        android:title="Filters"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_group"
+        android:title="Group by"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_apps"
         android:title="Apps to capture"
         app:showAsAction="never" />
@@ -24,7 +32,7 @@
         app:showAsAction="never" />
     <item
         android:id="@+id/action_har"
-        android:title="Export HAR"
+        android:title="Export HAR (shown requests)"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_clear"

@@ -15,7 +15,9 @@ Everything is free: no ads, no accounts, no subscription, no cloud. Captured tra
 | Viewer | Headers, JSON pretty-print, form decoding, gzip/deflate decoding, hex dump for binary bodies |
 | App selection | Choose which apps are captured: all, only selected, or all except selected (like Reqable's app list) |
 | Traffic source | Shows which app produced each request |
-| Search / filter | Free text over method, host, path, status and app; `2xx` / `3xx` / `4xx` / `5xx` quick filters |
+| Search / filter | Free text over method, host, path, status and app; `2xx`-`5xx` quick tokens; *Filters* dialog by status class and method, optional hiding of CONNECT tunnels |
+| Grouping | Group the list by domain or by app; tap a header to collapse |
+| Multi-select | Long-press a request (or a group header) to select; copy domains / URLs / cURL, export domains `.txt` or HAR, share URLs |
 | Composer | Build and send requests (GET/POST/PUT/PATCH/DELETE/...), or replay a captured one |
 | Rules | Block, map local, map remote, rewrite request/response headers |
 | Export | HAR 1.2 (opens in Chrome DevTools, Reqable, Charles), copy as cURL, share as text |

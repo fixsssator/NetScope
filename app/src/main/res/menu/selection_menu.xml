@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/sel_all"
+        android:title="Select all"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/sel_copy_domains"
+        android:title="Copy domains"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/sel_copy_urls"
+        android:title="Copy URLs"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/sel_copy_curl"
+        android:title="Copy as cURL"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/sel_export_domains"
+        android:title="Export domains (.txt)"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/sel_export_har"
+        android:title="Export HAR"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/sel_share"
+        android:title="Share URLs"
+        app:showAsAction="never" />
+</menu>

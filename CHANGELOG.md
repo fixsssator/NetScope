@@ -8,6 +8,8 @@ Reqable / Charles / HTTP Toolkit.
 - Local MITM proxy (HTTP/1.1, HTTPS via on-device CA, WebSocket upgrade passthrough, CONNECT tunnels)
 - System-wide capture through a VPN network that only registers the proxy (`VpnService.Builder#setHttpProxy`)
 - Traffic list with live updates, text filter and status-class filter (`2xx`, `4xx`, `5xx`)
+- Filters dialog (status class, method, hide tunnels) and grouping by domain or app with collapsible groups
+- Multi-select with long press: copy domains/URLs/cURL, export domains (.txt) or HAR, share URLs
 - Request/response viewer: headers, pretty-printed JSON, form decoding, gzip/deflate decoding, hex view for binary
 - App selection: capture all apps, only selected apps, or all except selected (searchable list, system apps optional); changing it restarts a running capture
 - Traffic source: shows which app made each request

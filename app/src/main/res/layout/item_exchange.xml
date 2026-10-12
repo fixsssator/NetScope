@@ -10,6 +10,14 @@
     android:paddingEnd="12dp"
     android:paddingBottom="8dp">
 
+    <CheckBox
+        android:id="@+id/check"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/method"
         android:layout_width="58dp"
