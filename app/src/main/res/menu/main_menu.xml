@@ -23,6 +23,10 @@
         android:title="Export HAR"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_apps"
+        android:title="Apps to capture"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_clear"
         android:title="Clear"
         app:showAsAction="never" />
