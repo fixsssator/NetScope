@@ -9,6 +9,11 @@ android {
     namespace 'com.fixsssator.netscope'
     compileSdk 35
 
+    // AGP 8 disables BuildConfig generation by default; MainActivity uses BuildConfig.VERSION_NAME.
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId 'com.fixsssator.netscope'
         // minSdk 29: VpnService.Builder#setHttpProxy and ConnectivityManager#getConnectionOwnerUid need API 29.
