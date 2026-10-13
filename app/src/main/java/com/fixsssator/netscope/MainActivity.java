@@ -46,6 +46,14 @@ public class MainActivity extends Activity {
         showAppPicker();
     }
 
+    private String appVersionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            return "unknown";
+        }
+    }
+
     private void setupRoot() {
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
@@ -58,7 +66,7 @@ public class MainActivity extends Activity {
     private void showAppPicker() {
         setupRoot();
         title("NetScope");
-        TextView version = text("Version " + BuildConfig.VERSION_NAME, 12);
+        TextView version = text("Version " + appVersionName(), 12);
         version.setTextColor(0xFF777777);
         root.addView(version, marginParams(0, 0, 0, 4));
         subtitle("Choose which apps you want to inspect.");
