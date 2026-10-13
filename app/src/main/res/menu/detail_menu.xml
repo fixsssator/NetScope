@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_fav"
+        android:title="Add to favorites"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_rule"
+        android:title="Create rule…"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_copy_body"
+        android:title="Copy body"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_save_body"
+        android:title="Save body to Downloads"
+        app:showAsAction="never" />
+</menu>

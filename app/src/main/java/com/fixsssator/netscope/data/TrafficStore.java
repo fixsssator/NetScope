@@ -57,9 +57,10 @@ public final class TrafficStore {
         return null;
     }
 
+    /** Removes all captured requests except the ones marked as favorites. */
     public void clear() {
         synchronized (items) {
-            items.clear();
+            items.removeIf(e -> !e.favorite);
         }
         changed();
     }

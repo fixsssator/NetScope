@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0
+
+- New adaptive launcher icon (themed/monochrome variant included)
+- Grouping by **app → domain** (nested, collapsible, multi-selectable)
+- Content-type chips (JSON / XML / HTML / JS / CSS / Image / Media / Font / Other)
+- Favorites (star, favorites-only filter, Clear keeps favorites)
+- Body viewer: Pretty / Raw / Hex, image preview, copy and save body
+- Copy as cURL / Python / fetch / raw HTTP
+- Request breakpoints with an edit-and-resume screen
+- SSL proxying list (decrypt all / only listed / all except listed, wildcard hosts)
+- Create a rule (breakpoint, block, map local) directly from a captured request
+
 ## 0.3.0
 
 Complete rewrite: NetScope is now a free, open-source HTTP(S) debugging proxy for Android in the spirit of

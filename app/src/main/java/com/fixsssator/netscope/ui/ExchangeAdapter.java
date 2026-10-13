@@ -17,7 +17,7 @@ import com.fixsssator.netscope.util.Fmt;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Shows either plain request rows or group headers followed by their requests. */
+/** Shows plain request rows and/or (nested) group headers followed by their requests. */
 final class ExchangeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     interface Callbacks {
         void onItemClick(Exchange e);
@@ -31,27 +31,30 @@ final class ExchangeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     static final class Row {
         final Exchange ex;       // null for group headers
-        final String groupKey;   // set for headers and for items inside a group
+        final String groupKey;   // group headers only
         final String title;
+        final int level;         // nesting depth: 0 = top level
         final int count;
         final boolean collapsed;
         final boolean checked;
 
-        private Row(Exchange ex, String groupKey, String title, int count, boolean collapsed, boolean checked) {
+        private Row(Exchange ex, String groupKey, String title, int level, int count, boolean collapsed,
+                    boolean checked) {
             this.ex = ex;
             this.groupKey = groupKey;
             this.title = title;
+            this.level = level;
             this.count = count;
             this.collapsed = collapsed;
             this.checked = checked;
         }
 
-        static Row item(Exchange e, String groupKey, boolean checked) {
-            return new Row(e, groupKey, null, 0, false, checked);
+        static Row item(Exchange e, int level, boolean checked) {
+            return new Row(e, null, null, level, 0, false, checked);
         }
 
-        static Row group(String key, String title, int count, boolean collapsed, boolean checked) {
-            return new Row(null, key, title, count, collapsed, checked);
+        static Row group(String key, String title, int level, int count, boolean collapsed, boolean checked) {
+            return new Row(null, key, title, level, count, collapsed, checked);
         }
     }
 
@@ -91,11 +94,18 @@ final class ExchangeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         return new ItemVH(inf.inflate(R.layout.item_exchange, parent, false));
     }
 
+    private static void indent(View v, int level, int basePaddingDp) {
+        float d = v.getResources().getDisplayMetrics().density;
+        v.setPadding((int) ((basePaddingDp + 16 * level) * d), v.getPaddingTop(), v.getPaddingRight(),
+                v.getPaddingBottom());
+    }
+
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         Row r = rows.get(position);
         if (holder instanceof GroupVH) {
             GroupVH h = (GroupVH) holder;
+            indent(h.itemView, r.level, 12);
             h.arrow.setText(r.collapsed ? "▸" : "▾");
             h.title.setText(r.title);
             h.count.setText(String.valueOf(r.count));
@@ -110,13 +120,11 @@ final class ExchangeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
         ItemVH h = (ItemVH) holder;
         Exchange e = r.ex;
-        float d = h.itemView.getResources().getDisplayMetrics().density;
-        h.itemView.setPadding((int) ((r.groupKey != null ? 28 : 12) * d), h.itemView.getPaddingTop(),
-                h.itemView.getPaddingRight(), h.itemView.getPaddingBottom());
+        indent(h.itemView, r.level, 12);
         h.check.setVisibility(selecting ? View.VISIBLE : View.GONE);
         h.check.setChecked(r.checked);
         h.method.setText(e.isTunnel() ? "TUNNEL" : e.websocket ? "WS" : e.method);
-        h.title.setText(e.host + (e.isTunnel() ? "" : e.path));
+        h.title.setText((e.favorite ? "★ " : "") + e.host + (e.isTunnel() ? "" : e.path));
 
         StringBuilder sub = new StringBuilder();
         int color;
@@ -124,6 +132,10 @@ final class ExchangeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             case PENDING:
                 sub.append("pending…");
                 color = GRAY;
+                break;
+            case PAUSED:
+                sub.append("⏸ paused at breakpoint - tap to edit");
+                color = ORANGE;
                 break;
             case ERROR:
                 sub.append("error");
@@ -141,10 +153,12 @@ final class ExchangeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 sub.append(e.status).append(' ').append(e.statusText);
                 color = e.status >= 500 ? RED : e.status >= 400 ? ORANGE : e.status >= 300 ? BLUE : GREEN;
         }
-        sub.append(" · ").append(Fmt.duration(e.durationMs));
-        if (!e.isTunnel()) sub.append(" · ").append(Fmt.size(e.respBodySize));
-        if (e.intercepted) sub.append(" · TLS");
-        if (e.appLabel != null) sub.append(" · ").append(e.appLabel);
+        if (e.state != Exchange.State.PAUSED) {
+            sub.append(" · ").append(Fmt.duration(e.durationMs));
+            if (!e.isTunnel()) sub.append(" · ").append(Fmt.size(e.respBodySize));
+            if (e.intercepted) sub.append(" · TLS");
+            if (e.appLabel != null) sub.append(" · ").append(e.appLabel);
+        }
         h.sub.setText(sub.toString().trim());
         h.sub.setTextColor(color);
         h.method.setTextColor(color);

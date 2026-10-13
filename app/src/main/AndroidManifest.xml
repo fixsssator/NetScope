@@ -7,7 +7,8 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.NetScope"
@@ -25,6 +26,8 @@
         <activity android:name=".ui.ComposeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.RulesActivity" android:exported="false" />
         <activity android:name=".ui.AppPickerActivity" android:exported="false" />
+        <activity android:name=".ui.SslActivity" android:exported="false" />
+        <activity android:name=".ui.BreakpointActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".vpn.NetScopeVpnService"

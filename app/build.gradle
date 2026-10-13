@@ -2,17 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
-def appVersionNameProp = project.findProperty('appVersionName') ?: '0.3.0'
-def appVersionCodeProp = (project.findProperty('appVersionCode') ?: '3').toInteger()
+def appVersionNameProp = project.findProperty('appVersionName') ?: '0.4.0'
+def appVersionCodeProp = (project.findProperty('appVersionCode') ?: '4').toInteger()
 
 android {
     namespace 'com.fixsssator.netscope'
     compileSdk 35
-
-    // MainActivity uses BuildConfig.VERSION_NAME; keep BuildConfig generation enabled.
-    buildFeatures {
-        buildConfig true
-    }
 
     defaultConfig {
         applicationId 'com.fixsssator.netscope'

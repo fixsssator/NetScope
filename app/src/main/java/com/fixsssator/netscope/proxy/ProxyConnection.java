@@ -4,7 +4,10 @@ import android.content.Context;
 
 import com.fixsssator.netscope.data.Exchange;
 import com.fixsssator.netscope.data.TrafficStore;
+import com.fixsssator.netscope.rules.BreakpointManager;
 import com.fixsssator.netscope.rules.RuleEngine;
+import com.fixsssator.netscope.rules.SslList;
+import com.fixsssator.netscope.util.BodyUtil;
 import com.fixsssator.netscope.util.Headers;
 
 import java.io.BufferedInputStream;
@@ -107,7 +110,8 @@ final class ProxyConnection implements Runnable {
         String[] hp = splitHostPort(rh.target, 443);
         String host = hp[0];
         int port = Integer.parseInt(hp[1]);
-        boolean mitmEnabled = ctx.getSharedPreferences("netscope", Context.MODE_PRIVATE).getBoolean("mitm", true);
+        boolean mitmEnabled = ctx.getSharedPreferences("netscope", Context.MODE_PRIVATE).getBoolean("mitm", true)
+                && SslList.shouldDecrypt(ctx, host);
 
         SSLSocketFactory factory = null;
         if (mitmEnabled && certs.isReady() && !TLS_BYPASS.contains(host + ":" + port)) {
@@ -254,6 +258,7 @@ final class ProxyConnection implements Runnable {
 
         boolean clientClose = wantsClose(rh);
         boolean ws = isWebSocket(rh.headers);
+        String reqMethod = rh.method;
         Socket up = null;
         boolean headSent = false;
         try {
@@ -312,10 +317,45 @@ final class ProxyConnection implements Runnable {
             }
             rules.applyHeaders(RuleEngine.Type.REQUEST_HEADER, url, hdrs);
 
+            if (rules.hasBreakpoint(url)) {
+                boolean textBody = body.length == 0 || BodyUtil.isText(body, rh.headers);
+                StringBuilder hs = new StringBuilder();
+                for (String[] h : hdrs) hs.append(h[0]).append(": ").append(h[1]).append('\n');
+                String shownUrl = upScheme + "://" + hostHeader(upScheme, upHost, upPort) + upPath;
+                BreakpointManager.Pending bp = BreakpointManager.get().pause(e, reqMethod, shownUrl,
+                        hs.toString().trim(), textBody ? new String(body, StandardCharsets.UTF_8) : "", textBody);
+                e.state = Exchange.State.PENDING;
+                if (bp.drop) {
+                    respondLocal(out, e, 502, "Bad Gateway", "text/plain; charset=utf-8",
+                            "Dropped at a NetScope breakpoint".getBytes(StandardCharsets.UTF_8), clientClose);
+                    e.state = Exchange.State.BLOCKED;
+                    e.note = "Dropped at breakpoint";
+                    finish(e);
+                    return !clientClose;
+                }
+                String newMethod = bp.method == null ? "" : bp.method.trim();
+                if (!newMethod.isEmpty()) reqMethod = newMethod.toUpperCase(Locale.ROOT);
+                Target edited = parseAbsolute(bp.url == null ? "" : bp.url.trim());
+                if (edited != null) {
+                    upScheme = edited.scheme;
+                    upHost = edited.host;
+                    upPort = edited.port;
+                    upPath = edited.path;
+                }
+                List<String[]> editedHeaders = new ArrayList<>();
+                for (String line : (bp.headers == null ? "" : bp.headers).split("\n")) {
+                    int colon = line.indexOf(':');
+                    if (colon > 0) editedHeaders.add(new String[]{line.substring(0, colon).trim(), line.substring(colon + 1).trim()});
+                }
+                hdrs = editedHeaders;
+                if (bp.bodyEditable) body = (bp.body == null ? "" : bp.body).getBytes(StandardCharsets.UTF_8);
+                e.note = "Edited at breakpoint";
+            }
+
             up = connectUpstream(upScheme, upHost, upPort, e);
             OutputStream uo = new BufferedOutputStream(up.getOutputStream(), 16384);
             StringBuilder sb = new StringBuilder(512);
-            sb.append(rh.method).append(' ').append(upPath).append(" HTTP/1.1\r\n");
+            sb.append(reqMethod).append(' ').append(upPath).append(" HTTP/1.1\r\n");
             sb.append("Host: ").append(hostHeader(upScheme, upHost, upPort)).append("\r\n");
             for (String[] h : hdrs) sb.append(h[0]).append(": ").append(h[1]).append("\r\n");
             if (!ws && Headers.get(rh.headers, "Accept-Encoding") != null) {
@@ -324,7 +364,7 @@ final class ProxyConnection implements Runnable {
             }
             if (ws) sb.append("Connection: Upgrade\r\nUpgrade: websocket\r\n");
             else sb.append("Connection: close\r\n");
-            if (body.length > 0 || needsBody(rh.method)) sb.append("Content-Length: ").append(body.length).append("\r\n");
+            if (body.length > 0 || needsBody(reqMethod)) sb.append("Content-Length: ").append(body.length).append("\r\n");
             sb.append("\r\n");
             uo.write(sb.toString().getBytes(StandardCharsets.ISO_8859_1));
             if (body.length > 0) uo.write(body);
@@ -362,7 +402,7 @@ final class ProxyConnection implements Runnable {
                 return false;
             }
 
-            boolean noBody = "HEAD".equalsIgnoreCase(rh.method) || sh.status == 204 || sh.status == 304;
+            boolean noBody = "HEAD".equalsIgnoreCase(reqMethod) || sh.status == 204 || sh.status == 304;
             boolean hasLength = Headers.get(sh.headers, "Content-Length") != null;
             boolean chunked = Headers.containsToken(Headers.get(sh.headers, "Transfer-Encoding"), "chunked");
             boolean eofDelimited = !noBody && !hasLength && !chunked;

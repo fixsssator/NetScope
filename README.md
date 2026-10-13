@@ -16,10 +16,16 @@ Everything is free: no ads, no accounts, no subscription, no cloud. Captured tra
 | App selection | Choose which apps are captured: all, only selected, or all except selected (like Reqable's app list) |
 | Traffic source | Shows which app produced each request |
 | Search / filter | Free text over method, host, path, status and app; `2xx`-`5xx` quick tokens; *Filters* dialog by status class and method, optional hiding of CONNECT tunnels |
-| Grouping | Group the list by domain or by app; tap a header to collapse |
+| Type chips | One-tap filter above the list: All / JSON / XML / HTML / JS / CSS / Image / Media / Font / Other |
+| Grouping | Group by domain, by app, or **app → domain** (nested tree); tap a header to collapse |
+| Favorites | Star requests; *Favorites only* filter; *Clear* keeps favorites |
 | Multi-select | Long-press a request (or a group header) to select; copy domains / URLs / cURL, export domains `.txt` or HAR, share URLs |
+| Body viewer | Pretty / Raw / Hex modes, image preview, copy body, save body to Downloads |
+| Copy as | cURL, Python (requests), JavaScript (fetch), raw HTTP request |
+| Breakpoints | Pause matching requests, edit method / URL / headers / body, then resume or drop |
+| SSL proxying list | Decrypt all hosts, only listed ones, or all except listed (`example.com`, `*.example.com`) |
 | Composer | Build and send requests (GET/POST/PUT/PATCH/DELETE/...), or replay a captured one |
-| Rules | Block, map local, map remote, rewrite request/response headers |
+| Rules | Block, map local, map remote, rewrite request/response headers, breakpoints; create a rule straight from a captured request |
 | Export | HAR 1.2 (opens in Chrome DevTools, Reqable, Charles), copy as cURL, share as text |
 | Privacy | No network access except the traffic you proxy; the CA key is generated on-device and stays there |
 
@@ -64,6 +70,8 @@ Everything is free: no ads, no accounts, no subscription, no cloud. Captured tra
   to `gzip, deflate` so bodies can be displayed (Brotli is not decoded).
 * Request bodies are buffered in memory (max 64 MB); only the first 2 MB of each body is kept for display.
 * WebSocket frames are relayed but not recorded.
+* Breakpoints pause the request thread; the client app may time out while you edit (typically 10-60 s). Paused requests are listed in an orange banner - there is no notification yet. Only request breakpoints exist (no response breakpoints).
+* Favorites and traffic live in memory only and are lost when the app process ends.
 * Requires **Android 10+ (API 29)**.
 * The VPN trick needs on-device verification per device/ROM. If an app's traffic does not show up, check that the app
   honours the system proxy.

@@ -5,7 +5,7 @@ import java.util.List;
 
 /** One captured request/response pair (or a tunnel / failed TLS attempt). */
 public class Exchange {
-    public enum State { PENDING, DONE, ERROR, BLOCKED, MOCKED }
+    public enum State { PENDING, PAUSED, DONE, ERROR, BLOCKED, MOCKED }
 
     /** Maximum number of body bytes kept in memory per direction. */
     public static final int BODY_LIMIT = 2 * 1024 * 1024;
@@ -29,6 +29,7 @@ public class Exchange {
     public String appPackage;
     public String appLabel;
 
+    public volatile boolean favorite;
     public boolean intercepted;
     public boolean websocket;
     public long durationMs = -1;

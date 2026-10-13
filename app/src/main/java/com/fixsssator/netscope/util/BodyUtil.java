@@ -17,6 +17,8 @@ import java.util.zip.InflaterInputStream;
 
 /** Decoding and pretty-printing of captured HTTP bodies. */
 public final class BodyUtil {
+    public enum ViewMode { PRETTY, RAW, HEX }
+
     private static final int MAX_CHARS = 300_000;
 
     private BodyUtil() {}
@@ -97,8 +99,12 @@ public final class BodyUtil {
         return new String(data, charset(headers));
     }
 
-    /** Human readable body for the UI. */
     public static String render(byte[] body, long fullSize, boolean truncated, List<String[]> headers) {
+        return render(body, fullSize, truncated, headers, ViewMode.PRETTY);
+    }
+
+    /** Human readable body for the UI in the chosen view mode. */
+    public static String render(byte[] body, long fullSize, boolean truncated, List<String[]> headers, ViewMode mode) {
         if (fullSize == 0) return "(empty body)";
         String enc = Headers.get(headers, "Content-Encoding");
         if (enc != null && enc.toLowerCase(Locale.ROOT).contains("br")) {
@@ -106,44 +112,56 @@ public final class BodyUtil {
         }
         byte[] data = decoded(body, headers);
         StringBuilder sb = new StringBuilder();
-        if (isText(data, headers)) {
+        boolean text = isText(data, headers);
+        if (mode == ViewMode.HEX || !text) {
+            sb.append(hexDump(data, mode == ViewMode.HEX ? 4096 : 512));
+        } else {
             String s = new String(data, charset(headers));
-            String ct = Headers.get(headers, "Content-Type");
-            String trimmed = s.trim();
-            if (ct != null && ct.toLowerCase(Locale.ROOT).contains("x-www-form-urlencoded")) {
-                s = prettyForm(s);
-            } else if (s.length() < 1_000_000 && (trimmed.startsWith("{") || trimmed.startsWith("["))) {
-                try {
-                    s = trimmed.startsWith("{") ? new JSONObject(trimmed).toString(2) : new JSONArray(trimmed).toString(2);
-                } catch (Exception ignored) {
-                    // not valid JSON - show as is
-                }
-            }
+            if (mode == ViewMode.PRETTY) s = pretty(s, headers);
             if (s.length() > MAX_CHARS) s = s.substring(0, MAX_CHARS) + "\n… (display truncated)";
             sb.append(s);
-        } else {
-            sb.append("[binary, ").append(Fmt.size(data.length)).append("]\n");
-            int n = Math.min(data.length, 512);
-            for (int i = 0; i < n; i += 16) {
-                sb.append(String.format(Locale.US, "%04x  ", i));
-                StringBuilder ascii = new StringBuilder();
-                for (int j = i; j < i + 16; j++) {
-                    if (j < n) {
-                        int b = data[j] & 0xff;
-                        sb.append(String.format(Locale.US, "%02x ", b));
-                        ascii.append(b >= 32 && b < 127 ? (char) b : '.');
-                    } else {
-                        sb.append("   ");
-                    }
-                }
-                sb.append(' ').append(ascii).append('\n');
-            }
-            if (data.length > n) sb.append("…\n");
         }
         if (truncated) {
             sb.append("\n\n… captured only the first ").append(Fmt.size(body.length))
                     .append(" of ").append(Fmt.size(fullSize));
         }
+        return sb.toString();
+    }
+
+    private static String pretty(String s, List<String[]> headers) {
+        String ct = Headers.get(headers, "Content-Type");
+        String trimmed = s.trim();
+        if (ct != null && ct.toLowerCase(Locale.ROOT).contains("x-www-form-urlencoded")) {
+            return prettyForm(s);
+        }
+        if (s.length() < 1_000_000 && (trimmed.startsWith("{") || trimmed.startsWith("["))) {
+            try {
+                return trimmed.startsWith("{") ? new JSONObject(trimmed).toString(2) : new JSONArray(trimmed).toString(2);
+            } catch (Exception ignored) {
+                // not valid JSON - show as is
+            }
+        }
+        return s;
+    }
+
+    public static String hexDump(byte[] data, int limit) {
+        StringBuilder sb = new StringBuilder("[").append(Fmt.size(data.length)).append("]\n");
+        int n = Math.min(data.length, limit);
+        for (int i = 0; i < n; i += 16) {
+            sb.append(String.format(Locale.US, "%04x  ", i));
+            StringBuilder ascii = new StringBuilder();
+            for (int j = i; j < i + 16; j++) {
+                if (j < n) {
+                    int b = data[j] & 0xff;
+                    sb.append(String.format(Locale.US, "%02x ", b));
+                    ascii.append(b >= 32 && b < 127 ? (char) b : '.');
+                } else {
+                    sb.append("   ");
+                }
+            }
+            sb.append(' ').append(ascii).append('\n');
+        }
+        if (data.length > n) sb.append("…\n");
         return sb.toString();
     }
 

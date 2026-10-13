@@ -33,7 +33,7 @@ public class RulesActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle("Rules");
+            getSupportActionBar().setTitle("Rules & breakpoints");
         }
         engine = RuleEngine.get(this);
 
@@ -104,6 +104,7 @@ public class RulesActivity extends AppCompatActivity {
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 switch (types[position]) {
                     case BLOCK:
+                    case BREAKPOINT:
                         value.setHint("(no value needed)");
                         value.setEnabled(false);
                         break;
@@ -134,7 +135,7 @@ public class RulesActivity extends AppCompatActivity {
                     RuleEngine.Rule r = new RuleEngine.Rule();
                     r.type = types[type.getSelectedItemPosition()];
                     r.pattern = pat;
-                    r.value = r.type == RuleEngine.Type.BLOCK ? "" : value.getText().toString().trim();
+                    r.value = (r.type == RuleEngine.Type.BLOCK || r.type == RuleEngine.Type.BREAKPOINT) ? "" : value.getText().toString().trim();
                     engine.add(r);
                     refresh();
                 })

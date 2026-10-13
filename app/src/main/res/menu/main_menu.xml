@@ -14,12 +14,16 @@
         android:title="Apps to capture"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_ssl"
+        android:title="SSL proxying list"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_compose"
         android:title="Composer"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_rules"
-        android:title="Rules"
+        android:title="Rules &amp; breakpoints"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_mitm"
@@ -36,6 +40,6 @@
         app:showAsAction="never" />
     <item
         android:id="@+id/action_clear"
-        android:title="Clear"
+        android:title="Clear (keeps favorites)"
         app:showAsAction="never" />
 </menu>

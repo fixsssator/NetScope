@@ -4,6 +4,8 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Typeface;
 import android.net.VpnService;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -33,11 +35,14 @@ import com.fixsssator.netscope.data.Exchange;
 import com.fixsssator.netscope.data.TrafficFilter;
 import com.fixsssator.netscope.data.TrafficStore;
 import com.fixsssator.netscope.proxy.CertManager;
+import com.fixsssator.netscope.rules.BreakpointManager;
 import com.fixsssator.netscope.util.CurlExporter;
 import com.fixsssator.netscope.util.Files;
 import com.fixsssator.netscope.util.HarExporter;
 import com.fixsssator.netscope.vpn.NetScopeVpnService;
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.nio.charset.StandardCharsets;
@@ -54,14 +59,16 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public class MainActivity extends AppCompatActivity implements TrafficStore.Listener, ExchangeAdapter.Callbacks {
-    private enum Group { NONE, DOMAIN, APP }
+    private enum Group { NONE, DOMAIN, APP, APP_DOMAIN }
 
     private final TrafficStore store = TrafficStore.get();
     private ExchangeAdapter adapter;
     private FloatingActionButton fab;
     private EditText search;
     private TextView banner;
+    private TextView bpBanner;
     private TextView empty;
+    private ChipGroup chips;
     private MaterialToolbar toolbar;
 
     private Group group = Group.NONE;
@@ -91,9 +98,11 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         setSupportActionBar(toolbar);
 
         banner = findViewById(R.id.banner);
+        bpBanner = findViewById(R.id.bp_banner);
         empty = findViewById(R.id.empty);
         search = findViewById(R.id.search);
         fab = findViewById(R.id.fab);
+        chips = findViewById(R.id.chips);
 
         try {
             group = Group.valueOf(prefs().getString("group", Group.NONE.name()));
@@ -105,6 +114,8 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         list.setLayoutManager(new LinearLayoutManager(this));
         adapter = new ExchangeAdapter(this);
         list.setAdapter(adapter);
+
+        setupChips();
 
         search.addTextChangedListener(new TextWatcher() {
             @Override
@@ -120,6 +131,10 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         });
 
         banner.setOnClickListener(v -> showCertDialog());
+        bpBanner.setOnClickListener(v -> {
+            BreakpointManager.Pending p = BreakpointManager.get().first();
+            if (p != null) openBreakpoint(p.exchange.id);
+        });
         fab.setOnClickListener(v -> toggleCapture());
     }
 
@@ -127,6 +142,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     protected void onStart() {
         super.onStart();
         store.addListener(this);
+        syncChips();
         refresh();
         updateBanner();
     }
@@ -142,8 +158,39 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         refresh();
     }
 
-    private android.content.SharedPreferences prefs() {
+    private SharedPreferences prefs() {
         return getSharedPreferences("netscope", Context.MODE_PRIVATE);
+    }
+
+    // ------------------------------------------------------------------ type chips
+
+    private void setupChips() {
+        for (int i = 0; i < TrafficFilter.TYPE_LABELS.length; i++) {
+            Chip c = new Chip(this);
+            c.setId(View.generateViewId());
+            c.setText(TrafficFilter.TYPE_LABELS[i]);
+            c.setCheckable(true);
+            c.setTag(i);
+            chips.addView(c);
+        }
+        syncChips();
+        chips.setOnCheckedStateChangeListener((g, ids) -> {
+            if (ids.isEmpty()) return;
+            View v = g.findViewById(ids.get(0));
+            if (v != null && v.getTag() instanceof Integer) {
+                TrafficFilter.type = (Integer) v.getTag();
+                refresh();
+            }
+        });
+    }
+
+    private void syncChips() {
+        for (int i = 0; i < chips.getChildCount(); i++) {
+            View c = chips.getChildAt(i);
+            if (c instanceof Chip && c.getTag() instanceof Integer) {
+                ((Chip) c).setChecked((Integer) c.getTag() == TrafficFilter.type);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ capture control
@@ -182,6 +229,27 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
 
     // ------------------------------------------------------------------ list, filters, grouping
 
+    private static String subKey(String app, String domain) {
+        return app + "\u0001" + domain;
+    }
+
+    private String appKey(Exchange e) {
+        return e.appLabel != null ? e.appLabel : "Unknown app";
+    }
+
+    private String domainKey(Exchange e) {
+        return e.host.isEmpty() ? "(no host)" : e.host;
+    }
+
+    private List<Exchange> bucket(String key) {
+        List<Exchange> l = groupMap.get(key);
+        if (l == null) {
+            l = new ArrayList<>();
+            groupMap.put(key, l);
+        }
+        return l;
+    }
+
     private void refresh() {
         boolean running = NetScopeVpnService.isRunning();
         fab.setImageResource(running ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
@@ -196,25 +264,49 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         List<ExchangeAdapter.Row> rows = new ArrayList<>();
         groupMap.clear();
         if (group == Group.NONE) {
-            for (Exchange e : visible) rows.add(ExchangeAdapter.Row.item(e, null, selected.contains(e.id)));
-        } else {
+            for (Exchange e : visible) rows.add(ExchangeAdapter.Row.item(e, 0, selected.contains(e.id)));
+        } else if (group == Group.APP_DOMAIN) {
+            Map<String, Map<String, List<Exchange>>> tree = new LinkedHashMap<>();
             for (Exchange e : visible) {
-                String key = keyOf(e);
-                List<Exchange> l = groupMap.get(key);
+                String app = appKey(e);
+                String dom = domainKey(e);
+                Map<String, List<Exchange>> doms = tree.get(app);
+                if (doms == null) {
+                    doms = new LinkedHashMap<>();
+                    tree.put(app, doms);
+                }
+                List<Exchange> l = doms.get(dom);
                 if (l == null) {
                     l = new ArrayList<>();
-                    groupMap.put(key, l);
+                    doms.put(dom, l);
                 }
                 l.add(e);
+                bucket(app).add(e);
+                bucket(subKey(app, dom)).add(e);
             }
+            for (Map.Entry<String, Map<String, List<Exchange>>> a : tree.entrySet()) {
+                String app = a.getKey();
+                List<Exchange> appItems = groupMap.get(app);
+                boolean appCollapsed = collapsed.contains(app);
+                rows.add(ExchangeAdapter.Row.group(app, app, 0, appItems.size(), appCollapsed, allSelected(appItems)));
+                if (appCollapsed) continue;
+                for (Map.Entry<String, List<Exchange>> d : a.getValue().entrySet()) {
+                    String key = subKey(app, d.getKey());
+                    boolean domCollapsed = collapsed.contains(key);
+                    rows.add(ExchangeAdapter.Row.group(key, d.getKey(), 1, d.getValue().size(), domCollapsed,
+                            allSelected(d.getValue())));
+                    if (domCollapsed) continue;
+                    for (Exchange e : d.getValue()) rows.add(ExchangeAdapter.Row.item(e, 2, selected.contains(e.id)));
+                }
+            }
+        } else {
+            for (Exchange e : visible) bucket(group == Group.APP ? appKey(e) : domainKey(e)).add(e);
             for (Map.Entry<String, List<Exchange>> en : groupMap.entrySet()) {
                 boolean isCollapsed = collapsed.contains(en.getKey());
-                rows.add(ExchangeAdapter.Row.group(en.getKey(), en.getKey(), en.getValue().size(),
+                rows.add(ExchangeAdapter.Row.group(en.getKey(), en.getKey(), 0, en.getValue().size(),
                         isCollapsed, allSelected(en.getValue())));
                 if (isCollapsed) continue;
-                for (Exchange e : en.getValue()) {
-                    rows.add(ExchangeAdapter.Row.item(e, en.getKey(), selected.contains(e.id)));
-                }
+                for (Exchange e : en.getValue()) rows.add(ExchangeAdapter.Row.item(e, 1, selected.contains(e.id)));
             }
         }
         adapter.submit(rows, actionMode != null);
@@ -223,20 +315,36 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         sub.append(AppFilter.summary(this)).append(" · ");
         sub.append(visible.size() == all.size() ? all.size() + " requests" : visible.size() + " of " + all.size());
         if (TrafficFilter.isActive()) sub.append(" · filtered");
-        if (group != Group.NONE) sub.append(group == Group.DOMAIN ? " · by domain" : " · by app");
+        switch (group) {
+            case DOMAIN:
+                sub.append(" · by domain");
+                break;
+            case APP:
+                sub.append(" · by app");
+                break;
+            case APP_DOMAIN:
+                sub.append(" · app → domain");
+                break;
+            default:
+                break;
+        }
         toolbar.setTitle("NetScope");
         toolbar.setSubtitle(sub.toString());
+
+        int paused = BreakpointManager.get().count();
+        if (paused > 0) {
+            bpBanner.setText("⏸ " + paused + (paused == 1 ? " request is" : " requests are")
+                    + " paused at a breakpoint - tap to edit");
+            bpBanner.setVisibility(View.VISIBLE);
+        } else {
+            bpBanner.setVisibility(View.GONE);
+        }
 
         empty.setText(all.isEmpty()
                 ? (running ? "Waiting for traffic…\nOpen a browser or app that uses the system proxy."
                 : "No traffic yet.\nTap ▶ to start capturing.")
                 : "Nothing matches the current filters.");
         empty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
-    }
-
-    private String keyOf(Exchange e) {
-        if (group == Group.APP) return e.appLabel != null ? e.appLabel : "Unknown app";
-        return e.host.isEmpty() ? "(no host)" : e.host;
     }
 
     private boolean allSelected(List<Exchange> list) {
@@ -254,11 +362,15 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         sv.addView(box);
 
         TextView note = new TextView(this);
-        note.setText("Nothing checked in a section = no restriction.");
+        note.setText("Nothing checked in a section = no restriction. (Content type: use the chips above the list.)");
         note.setTextSize(12);
         box.addView(note);
         CheckBox[] st = addSection(box, "Status", TrafficFilter.STATUS_LABELS, TrafficFilter.status);
         CheckBox[] me = addSection(box, "Method", TrafficFilter.METHOD_LABELS, TrafficFilter.method);
+        CheckBox fav = new CheckBox(this);
+        fav.setText("Favorites only ★");
+        fav.setChecked(TrafficFilter.favoritesOnly);
+        box.addView(fav);
         CheckBox hide = new CheckBox(this);
         hide.setText("Hide CONNECT tunnels");
         hide.setChecked(TrafficFilter.hideTunnels);
@@ -270,11 +382,13 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
                 .setPositiveButton("Apply", (d, w) -> {
                     for (int i = 0; i < st.length; i++) TrafficFilter.status[i] = st[i].isChecked();
                     for (int i = 0; i < me.length; i++) TrafficFilter.method[i] = me[i].isChecked();
+                    TrafficFilter.favoritesOnly = fav.isChecked();
                     TrafficFilter.hideTunnels = hide.isChecked();
                     refresh();
                 })
                 .setNeutralButton("Reset", (d, w) -> {
                     TrafficFilter.reset();
+                    syncChips();
                     refresh();
                 })
                 .setNegativeButton("Cancel", null)
@@ -285,7 +399,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         TextView t = new TextView(this);
         t.setText(title);
         t.setTextSize(14);
-        t.setTypeface(null, android.graphics.Typeface.BOLD);
+        t.setTypeface(null, Typeface.BOLD);
         t.setPadding(0, (int) (14 * getResources().getDisplayMetrics().density), 0, 0);
         box.addView(t);
         CheckBox[] boxes = new CheckBox[labels.length];
@@ -299,7 +413,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     }
 
     private void showGroupDialog() {
-        String[] names = {"No grouping", "By domain", "By app"};
+        String[] names = {"No grouping", "By domain", "By app", "By app → domain"};
         new AlertDialog.Builder(this)
                 .setTitle("Group requests")
                 .setSingleChoiceItems(names, group.ordinal(), (d, which) -> {
@@ -315,10 +429,20 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
 
     // ------------------------------------------------------------------ row callbacks / selection
 
+    private void openBreakpoint(long id) {
+        Intent i = new Intent(this, BreakpointActivity.class);
+        i.putExtra(BreakpointActivity.EXTRA_ID, id);
+        startActivity(i);
+    }
+
     @Override
     public void onItemClick(Exchange e) {
         if (actionMode != null) {
             toggle(e.id);
+            return;
+        }
+        if (e.state == Exchange.State.PAUSED && BreakpointManager.get().forExchange(e.id) != null) {
+            openBreakpoint(e.id);
             return;
         }
         Intent i = new Intent(this, DetailActivity.class);
@@ -416,6 +540,12 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
             String text = joinDomains(sel);
             copy("Domains", text);
             toast(text.split("\n").length + " unique domains copied");
+        } else if (id == R.id.sel_favorite) {
+            boolean allFav = true;
+            for (Exchange e : sel) if (!e.favorite) allFav = false;
+            for (Exchange e : sel) e.favorite = !allFav;
+            toast(allFav ? "Removed from favorites" : sel.size() + " added to favorites");
+            refresh();
         } else if (id == R.id.sel_copy_urls) {
             copy("URLs", joinUrls(sel));
             toast(sel.size() + " URLs copied");
@@ -554,6 +684,8 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
             showGroupDialog();
         } else if (id == R.id.action_apps) {
             appPicker.launch(new Intent(this, AppPickerActivity.class));
+        } else if (id == R.id.action_ssl) {
+            startActivity(new Intent(this, SslActivity.class));
         } else if (id == R.id.action_compose) {
             startActivity(new Intent(this, ComposeActivity.class));
         } else if (id == R.id.action_rules) {

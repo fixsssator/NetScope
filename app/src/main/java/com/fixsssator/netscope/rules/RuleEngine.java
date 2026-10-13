@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 
 /** Rewrite rules applied by the proxy: block, map local, map remote, header rewrite. */
 public final class RuleEngine {
-    public enum Type { BLOCK, MAP_LOCAL, MAP_REMOTE, REQUEST_HEADER, RESPONSE_HEADER }
+    public enum Type { BLOCK, MAP_LOCAL, MAP_REMOTE, REQUEST_HEADER, RESPONSE_HEADER, BREAKPOINT }
 
     public static final class Rule {
         public Type type = Type.BLOCK;
@@ -89,6 +89,14 @@ public final class RuleEngine {
             }
         }
         return null;
+    }
+
+    /** True when an enabled BREAKPOINT rule matches: the request is paused until the user resumes it. */
+    public boolean hasBreakpoint(String url) {
+        for (Rule r : rules) {
+            if (r.enabled && r.type == Type.BREAKPOINT && r.matches(url)) return true;
+        }
+        return false;
     }
 
     /** Applies all matching header rules of the given type ("Name: value"; empty value removes the header). */

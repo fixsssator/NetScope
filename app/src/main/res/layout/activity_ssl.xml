@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize" />
+
+    <RadioGroup
+        android:id="@+id/ssl_mode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <RadioButton
+            android:id="@+id/rb_ssl_all"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Decrypt all hosts" />
+
+        <RadioButton
+            android:id="@+id/rb_ssl_only"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Decrypt only hosts in the list" />
+
+        <RadioButton
+            android:id="@+id/rb_ssl_except"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Decrypt all except hosts in the list" />
+    </RadioGroup>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="One host per line: example.com or *.example.com. Hosts that are not decrypted are tunnelled untouched (use this for apps with certificate pinning)."
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/ssl_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_margin="12dp"
+        android:layout_weight="1"
+        android:fontFamily="monospace"
+        android:gravity="top"
+        android:hint="*.example.com\napi.example.org"
+        android:inputType="textMultiLine|textNoSuggestions|textUri"
+        android:textSize="13sp" />
+</LinearLayout>
