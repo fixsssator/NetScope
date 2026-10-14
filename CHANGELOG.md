@@ -3,6 +3,8 @@
 ## 0.4.0
 
 - New adaptive launcher icon (themed/monochrome variant included)
+- App picker: selected apps are listed first; "Copy apps" for selected requests; package name is searchable
+- Grouping by **app → IP** (nested)
 - Grouping by **IP address** (also searchable, and "Copy IPs" for selections)
 - Grouping by **app → domain** (nested, collapsible, multi-selectable)
 - Content-type chips (JSON / XML / HTML / JS / CSS / Image / Media / Font / Other)

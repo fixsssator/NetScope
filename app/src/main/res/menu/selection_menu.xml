@@ -10,6 +10,10 @@
         android:title="Copy domains"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/sel_copy_apps"
+        android:title="Copy apps"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/sel_copy_ips"
         android:title="Copy IPs"
         app:showAsAction="never" />

@@ -49,6 +49,7 @@ public final class TrafficFilter {
         if (query.isEmpty()) return true;
         String hay = (e.method + " " + e.status + " " + e.host + e.path + " "
                 + (e.appLabel == null ? "" : e.appLabel) + " "
+                + (e.appPackage == null ? "" : e.appPackage) + " "
                 + (e.remoteIp == null ? "" : e.remoteIp)).toLowerCase(Locale.ROOT);
         for (String tok : query.split("\\s+")) {
             if (tok.matches("[1-5]xx")) {

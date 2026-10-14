@@ -144,14 +144,22 @@ public class AppPickerActivity extends AppCompatActivity {
         }, "netscope-app-list").start();
     }
 
+    /**
+     * Rebuilds the visible list: selected apps first, then the rest, each part alphabetical.
+     * Toggling a checkbox does not re-sort (the row would jump under your finger); the order is
+     * refreshed when the screen opens, on search, on "show system apps", and on select all / clear.
+     */
     private void applyFilter() {
         shown.clear();
+        List<Item> others = new ArrayList<>();
         for (Item it : all) {
             if (!showSystem && it.system && !selected.contains(it.pkg)) continue;
             if (!query.isEmpty() && !it.label.toLowerCase(Locale.ROOT).contains(query)
                     && !it.pkg.toLowerCase(Locale.ROOT).contains(query)) continue;
-            shown.add(it);
+            if (selected.contains(it.pkg)) shown.add(it);
+            else others.add(it);
         }
+        shown.addAll(others);
         adapter.notifyDataSetChanged();
     }
 
@@ -192,12 +200,12 @@ public class AppPickerActivity extends AppCompatActivity {
             for (Item it : shown) selected.add(it.pkg);
             AppFilter.setSelected(this, selected);
             changed();
-            adapter.notifyDataSetChanged();
+            applyFilter();
         } else if (id == R.id.action_clear_sel) {
             selected.clear();
             AppFilter.setSelected(this, selected);
             changed();
-            adapter.notifyDataSetChanged();
+            applyFilter();
         } else {
             return super.onOptionsItemSelected(item);
         }

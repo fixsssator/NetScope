@@ -59,7 +59,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public class MainActivity extends AppCompatActivity implements TrafficStore.Listener, ExchangeAdapter.Callbacks {
-    private enum Group { NONE, DOMAIN, APP, APP_DOMAIN, IP }
+    private enum Group { NONE, DOMAIN, APP, APP_DOMAIN, IP, APP_IP }
 
     private final TrafficStore store = TrafficStore.get();
     private ExchangeAdapter adapter;
@@ -280,11 +280,11 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         groupMap.clear();
         if (group == Group.NONE) {
             for (Exchange e : visible) rows.add(ExchangeAdapter.Row.item(e, 0, selected.contains(e.id)));
-        } else if (group == Group.APP_DOMAIN) {
+        } else if (group == Group.APP_DOMAIN || group == Group.APP_IP) {
             Map<String, Map<String, List<Exchange>>> tree = new LinkedHashMap<>();
             for (Exchange e : visible) {
                 String app = appKey(e);
-                String dom = domainKey(e);
+                String dom = group == Group.APP_IP ? ipKey(e) : domainKey(e);
                 Map<String, List<Exchange>> doms = tree.get(app);
                 if (doms == null) {
                     doms = new LinkedHashMap<>();
@@ -342,6 +342,9 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
                 break;
             case IP:
                 sub.append(" · by IP");
+                break;
+            case APP_IP:
+                sub.append(" · app → IP");
                 break;
             default:
                 break;
@@ -431,7 +434,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     }
 
     private void showGroupDialog() {
-        String[] names = {"No grouping", "By domain", "By app", "By app → domain", "By IP"};
+        String[] names = {"No grouping", "By domain", "By app", "By app → domain", "By IP", "By app → IP"};
         new AlertDialog.Builder(this)
                 .setTitle("Group requests")
                 .setSingleChoiceItems(names, group.ordinal(), (d, which) -> {
@@ -558,6 +561,14 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
             String text = joinDomains(sel);
             copy("Domains", text);
             toast(text.split("\n").length + " unique domains copied");
+        } else if (id == R.id.sel_copy_apps) {
+            String text = joinApps(sel);
+            if (text.isEmpty()) {
+                toast("No app information for the selected requests");
+            } else {
+                copy("Apps", text);
+                toast(text.split("\n").length + " unique apps copied");
+            }
         } else if (id == R.id.sel_copy_ips) {
             String text = joinIps(sel);
             if (text.isEmpty()) {
@@ -600,6 +611,16 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         for (Exchange e : list) if (!e.host.isEmpty()) hosts.add(e.host);
         StringBuilder sb = new StringBuilder();
         for (String h : hosts) sb.append(h).append('\n');
+        return sb.toString().trim();
+    }
+
+    private static String joinApps(List<Exchange> list) {
+        Set<String> apps = new TreeSet<>();
+        for (Exchange e : list) {
+            if (e.appPackage != null) apps.add(e.appLabel + " (" + e.appPackage + ")");
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String a : apps) sb.append(a).append('\n');
         return sb.toString().trim();
     }
 
