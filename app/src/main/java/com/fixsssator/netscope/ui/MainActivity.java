@@ -59,7 +59,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public class MainActivity extends AppCompatActivity implements TrafficStore.Listener, ExchangeAdapter.Callbacks {
-    private enum Group { NONE, DOMAIN, APP, APP_DOMAIN }
+    private enum Group { NONE, DOMAIN, APP, APP_DOMAIN, IP }
 
     private final TrafficStore store = TrafficStore.get();
     private ExchangeAdapter adapter;
@@ -241,6 +241,21 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         return e.host.isEmpty() ? "(no host)" : e.host;
     }
 
+    private String ipKey(Exchange e) {
+        return e.remoteIp != null ? e.remoteIp : "(no connection)";
+    }
+
+    private String simpleKey(Exchange e) {
+        switch (group) {
+            case APP:
+                return appKey(e);
+            case IP:
+                return ipKey(e);
+            default:
+                return domainKey(e);
+        }
+    }
+
     private List<Exchange> bucket(String key) {
         List<Exchange> l = groupMap.get(key);
         if (l == null) {
@@ -300,7 +315,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
                 }
             }
         } else {
-            for (Exchange e : visible) bucket(group == Group.APP ? appKey(e) : domainKey(e)).add(e);
+            for (Exchange e : visible) bucket(simpleKey(e)).add(e);
             for (Map.Entry<String, List<Exchange>> en : groupMap.entrySet()) {
                 boolean isCollapsed = collapsed.contains(en.getKey());
                 rows.add(ExchangeAdapter.Row.group(en.getKey(), en.getKey(), 0, en.getValue().size(),
@@ -324,6 +339,9 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
                 break;
             case APP_DOMAIN:
                 sub.append(" · app → domain");
+                break;
+            case IP:
+                sub.append(" · by IP");
                 break;
             default:
                 break;
@@ -413,7 +431,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     }
 
     private void showGroupDialog() {
-        String[] names = {"No grouping", "By domain", "By app", "By app → domain"};
+        String[] names = {"No grouping", "By domain", "By app", "By app → domain", "By IP"};
         new AlertDialog.Builder(this)
                 .setTitle("Group requests")
                 .setSingleChoiceItems(names, group.ordinal(), (d, which) -> {
@@ -540,6 +558,14 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
             String text = joinDomains(sel);
             copy("Domains", text);
             toast(text.split("\n").length + " unique domains copied");
+        } else if (id == R.id.sel_copy_ips) {
+            String text = joinIps(sel);
+            if (text.isEmpty()) {
+                toast("No IP addresses for the selected requests");
+            } else {
+                copy("IPs", text);
+                toast(text.split("\n").length + " unique IPs copied");
+            }
         } else if (id == R.id.sel_favorite) {
             boolean allFav = true;
             for (Exchange e : sel) if (!e.favorite) allFav = false;
@@ -574,6 +600,14 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         for (Exchange e : list) if (!e.host.isEmpty()) hosts.add(e.host);
         StringBuilder sb = new StringBuilder();
         for (String h : hosts) sb.append(h).append('\n');
+        return sb.toString().trim();
+    }
+
+    private static String joinIps(List<Exchange> list) {
+        Set<String> ips = new TreeSet<>();
+        for (Exchange e : list) if (e.remoteIp != null) ips.add(e.remoteIp);
+        StringBuilder sb = new StringBuilder();
+        for (String ip : ips) sb.append(ip).append('\n');
         return sb.toString().trim();
     }
 

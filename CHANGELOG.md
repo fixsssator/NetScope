@@ -3,6 +3,7 @@
 ## 0.4.0
 
 - New adaptive launcher icon (themed/monochrome variant included)
+- Grouping by **IP address** (also searchable, and "Copy IPs" for selections)
 - Grouping by **app → domain** (nested, collapsible, multi-selectable)
 - Content-type chips (JSON / XML / HTML / JS / CSS / Image / Media / Font / Other)
 - Favorites (star, favorites-only filter, Clear keeps favorites)
