@@ -59,7 +59,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public class MainActivity extends AppCompatActivity implements TrafficStore.Listener, ExchangeAdapter.Callbacks {
-    private enum Group { NONE, DOMAIN, APP, APP_DOMAIN, IP, APP_IP }
+    /** DOMAIN is always nested under the app level (app → domain). NONE is the flat list. */
+    private enum Group { NONE, DOMAIN }
 
     private final TrafficStore store = TrafficStore.get();
     private ExchangeAdapter adapter;
@@ -71,7 +72,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     private ChipGroup chips;
     private MaterialToolbar toolbar;
 
-    private Group group = Group.NONE;
+    private Group group = Group.DOMAIN;
     private final Set<String> collapsed = new HashSet<>();
     private final Set<Long> selected = new HashSet<>();
     private final Map<String, List<Exchange>> groupMap = new LinkedHashMap<>();
@@ -105,9 +106,12 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         chips = findViewById(R.id.chips);
 
         try {
-            group = Group.valueOf(prefs().getString("group", Group.NONE.name()));
+            String saved = prefs().getString("group", Group.DOMAIN.name());
+            // older versions had separate app / app→domain / app→IP / IP modes; they all map to app → domain now
+            if (!saved.equals(Group.NONE.name())) saved = Group.DOMAIN.name();
+            group = Group.valueOf(saved);
         } catch (IllegalArgumentException e) {
-            group = Group.NONE;
+            group = Group.DOMAIN;
         }
 
         RecyclerView list = findViewById(R.id.list);
@@ -241,21 +245,6 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         return e.host.isEmpty() ? "(no host)" : e.host;
     }
 
-    private String ipKey(Exchange e) {
-        return e.remoteIp != null ? e.remoteIp : "(no connection)";
-    }
-
-    private String simpleKey(Exchange e) {
-        switch (group) {
-            case APP:
-                return appKey(e);
-            case IP:
-                return ipKey(e);
-            default:
-                return domainKey(e);
-        }
-    }
-
     private List<Exchange> bucket(String key) {
         List<Exchange> l = groupMap.get(key);
         if (l == null) {
@@ -280,11 +269,11 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         groupMap.clear();
         if (group == Group.NONE) {
             for (Exchange e : visible) rows.add(ExchangeAdapter.Row.item(e, 0, selected.contains(e.id)));
-        } else if (group == Group.APP_DOMAIN || group == Group.APP_IP) {
+        } else {
             Map<String, Map<String, List<Exchange>>> tree = new LinkedHashMap<>();
             for (Exchange e : visible) {
                 String app = appKey(e);
-                String dom = group == Group.APP_IP ? ipKey(e) : domainKey(e);
+                String dom = domainKey(e);
                 Map<String, List<Exchange>> doms = tree.get(app);
                 if (doms == null) {
                     doms = new LinkedHashMap<>();
@@ -314,15 +303,6 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
                     for (Exchange e : d.getValue()) rows.add(ExchangeAdapter.Row.item(e, 2, selected.contains(e.id)));
                 }
             }
-        } else {
-            for (Exchange e : visible) bucket(simpleKey(e)).add(e);
-            for (Map.Entry<String, List<Exchange>> en : groupMap.entrySet()) {
-                boolean isCollapsed = collapsed.contains(en.getKey());
-                rows.add(ExchangeAdapter.Row.group(en.getKey(), en.getKey(), 0, en.getValue().size(),
-                        isCollapsed, allSelected(en.getValue())));
-                if (isCollapsed) continue;
-                for (Exchange e : en.getValue()) rows.add(ExchangeAdapter.Row.item(e, 1, selected.contains(e.id)));
-            }
         }
         adapter.submit(rows, actionMode != null);
 
@@ -332,19 +312,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
         if (TrafficFilter.isActive()) sub.append(" · filtered");
         switch (group) {
             case DOMAIN:
-                sub.append(" · by domain");
-                break;
-            case APP:
-                sub.append(" · by app");
-                break;
-            case APP_DOMAIN:
                 sub.append(" · app → domain");
-                break;
-            case IP:
-                sub.append(" · by IP");
-                break;
-            case APP_IP:
-                sub.append(" · app → IP");
                 break;
             default:
                 break;
@@ -434,7 +402,7 @@ public class MainActivity extends AppCompatActivity implements TrafficStore.List
     }
 
     private void showGroupDialog() {
-        String[] names = {"No grouping", "By domain", "By app", "By app → domain", "By IP", "By app → IP"};
+        String[] names = {"No grouping (flat list)", "By app → domain"};
         new AlertDialog.Builder(this)
                 .setTitle("Group requests")
                 .setSingleChoiceItems(names, group.ordinal(), (d, which) -> {

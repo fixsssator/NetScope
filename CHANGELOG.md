@@ -4,9 +4,8 @@
 
 - New adaptive launcher icon (themed/monochrome variant included)
 - App picker: selected apps are listed first; "Copy apps" for selected requests; package name is searchable
-- Grouping by **app → IP** (nested)
-- Grouping by **IP address** (also searchable, and "Copy IPs" for selections)
-- Grouping by **app → domain** (nested, collapsible, multi-selectable)
+- Grouping: the app is always the top level (collapse whole apps), with domains nested underneath (the default view); flat list also available. Everything is collapsible and multi-selectable
+- IP addresses are searchable; "Copy IPs" and "Copy apps" for selections
 - Content-type chips (JSON / XML / HTML / JS / CSS / Image / Media / Font / Other)
 - Favorites (star, favorites-only filter, Clear keeps favorites)
 - Body viewer: Pretty / Raw / Hex, image preview, copy and save body

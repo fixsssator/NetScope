@@ -17,7 +17,7 @@ Everything is free: no ads, no accounts, no subscription, no cloud. Captured tra
 | Traffic source | Shows which app produced each request |
 | Search / filter | Free text over method, host, path, status and app; `2xx`-`5xx` quick tokens; *Filters* dialog by status class and method, optional hiding of CONNECT tunnels |
 | Type chips | One-tap filter above the list: All / JSON / XML / HTML / JS / CSS / Image / Media / Font / Other |
-| Grouping | Group by domain, by **IP address**, by app, or **app → domain** or **app → IP** (nested trees); tap a header to collapse |
+| Grouping | Grouping is always app first (collapse whole apps), then by **domain** underneath (the default); or a flat list. Tap a header to collapse |
 | Apps | The app picker lists selected apps first; app name and package are searchable; "Copy apps" for selections |
 | Favorites | Star requests; *Favorites only* filter; *Clear* keeps favorites |
 | Multi-select | Long-press a request (or a group header) to select; copy domains / URLs / cURL, export domains `.txt` or HAR, share URLs |
